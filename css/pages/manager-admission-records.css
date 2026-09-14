@@ -1,0 +1,7 @@
+/* P-MGR-09: 已处理准入记录 */
+.b3[data-page="P-MGR-09"] .b2-table td:first-child:not(.b2-check) {
+  min-width: 210px;
+}
+.b3[data-page="P-MGR-09"] .b3-form {
+  border-top: 1px solid var(--border);
+}

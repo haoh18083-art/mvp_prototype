@@ -1,0 +1,9 @@
+.pool-detail-tools {
+  padding: 16px 20px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  justify-content: flex-end;
+}
+.b2[data-page="P-ADM-08"] .b2-detail-head .b2-entity {
+  flex: 1;
+}

@@ -1,0 +1,6 @@
+.b2[data-page="P-ADM-07"] .b2-table td:first-child {
+  min-width: 220px;
+}
+.b2[data-page="P-ADM-07"] .b2-stat:nth-child(3) .b2-stat__value {
+  color: var(--amber-700);
+}

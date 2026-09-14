@@ -1,0 +1,12 @@
+.b2[data-page="P-CMN-03"] .b2-detail-head .b2-entity {
+  flex: 1;
+}
+.b2[data-page="P-CMN-03"] .b2-detail-head .b2-name {
+  font-size: 20px;
+}
+.customer-form {
+  max-width: 900px;
+}
+.b2[data-page="P-CMN-03"] .b2-kv {
+  row-gap: 28px;
+}

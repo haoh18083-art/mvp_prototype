@@ -1,0 +1,8 @@
+/* P-SLS-05: 公海客户详情 */
+.b3[data-page="P-SLS-05"] .b2-table td:first-child:not(.b2-check) {
+  min-width: 210px;
+}
+.b3[data-page="P-SLS-05"] .b3-form {
+  max-width: 960px;
+  margin-inline: auto;
+}

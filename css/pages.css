@@ -1,0 +1,258 @@
+/* ==========================================================================
+   页面级样式（只放某个页面独有的排布，通用部分一律回 components.css）
+   ========================================================================== */
+
+/* ----------------------------------------  P-CMN-01 登录页 */
+
+.login {
+  width: 100%;
+  max-width: 392px;
+}
+
+.login__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: center;
+  margin-bottom: var(--sp-6);
+}
+.login__mark {
+  width: 38px; height: 38px;
+  border-radius: var(--r-8);
+  background: linear-gradient(140deg, var(--brand-500), var(--brand-800));
+  display: grid; place-items: center;
+  color: #fff;
+  font-size: var(--fs-16);
+  font-weight: var(--fw-semi);
+  box-shadow: var(--sh-sm);
+}
+.login__name { font-size: var(--fs-18); font-weight: var(--fw-semi); letter-spacing: -.01em; }
+.login__ver { font-size: var(--fs-12); color: var(--text-3); }
+
+.login__card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-12);
+  box-shadow: var(--sh-md);
+  padding: var(--sp-6);
+}
+.login__title { font-size: var(--fs-16); font-weight: var(--fw-semi); }
+.login__desc { font-size: var(--fs-12); color: var(--text-2); margin-top: var(--sp-1); }
+.login__form { margin-top: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4); }
+.login__err { min-height: 18px; }
+.login__foot {
+  margin-top: var(--sp-5);
+  text-align: center;
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  line-height: var(--lh-loose);
+}
+
+/* 原型演示账号 */
+.login__demo {
+  margin-top: var(--sp-4);
+  border-top: 1px dashed var(--border);
+  padding-top: var(--sp-4);
+}
+.login__demo-t {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  margin-bottom: var(--sp-2);
+}
+.login__demo-list { display: grid; gap: var(--sp-1); }
+.login__demo-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-6);
+  background: var(--bg-subtle);
+  font-size: var(--fs-12);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.login__demo-row:hover { border-color: var(--brand-300); background: var(--brand-50); }
+.login__demo-role { flex: none; width: 84px; font-weight: var(--fw-medium); }
+.login__demo-mail { color: var(--text-2); font-family: var(--font-mono); font-size: var(--fs-11); }
+
+/* ----------------------------------------  原型导航首页 */
+
+.hub { max-width: 1180px; margin: 0 auto; padding: var(--sp-10) var(--sp-6) var(--sp-12); }
+.hub__head { margin-bottom: var(--sp-8); }
+.hub__kicker {
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semi);
+  letter-spacing: .08em;
+  color: var(--brand-600);
+  margin-bottom: var(--sp-2);
+}
+.hub__title { font-size: var(--fs-30); font-weight: var(--fw-semi); letter-spacing: -.02em; }
+.hub__desc { margin-top: var(--sp-3); font-size: var(--fs-14); color: var(--text-2); max-width: 720px; line-height: var(--lh-loose); }
+
+.hub__group { margin-top: var(--sp-8); }
+.hub__group-head {
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-4);
+}
+.hub__group-t { font-size: var(--fs-15); font-weight: var(--fw-semi); }
+.hub__group-d { font-size: var(--fs-12); color: var(--text-3); }
+
+.hub__grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); }
+
+.hubcard {
+  display: block;
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-8);
+  background: var(--bg-surface);
+  box-shadow: var(--sh-xs);
+  color: inherit;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+}
+.hubcard:hover {
+  border-color: var(--brand-300);
+  box-shadow: var(--sh-sm);
+  transform: translateY(-1px);
+  color: inherit;
+}
+.hubcard__top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.hubcard__id { font-family: var(--font-mono); font-size: var(--fs-11); color: var(--text-3); }
+.hubcard__t { margin-top: var(--sp-2); font-size: var(--fs-14); font-weight: var(--fw-medium); }
+.hubcard__d { margin-top: var(--sp-1); font-size: var(--fs-12); color: var(--text-2); line-height: 1.5; }
+.hubcard__src { margin-top: var(--sp-3); font-size: var(--fs-11); color: var(--text-3); }
+
+.hubcard.is-todo { opacity: .62; pointer-events: none; }
+
+/* ----------------------------------------  P-ADM-02 人员详情页 */
+
+.person-hero {
+  display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.person-hero__av {
+  width: 52px; height: 52px; flex: none;
+  border-radius: var(--r-full);
+  background: var(--brand-100);
+  color: var(--brand-700);
+  display: grid; place-items: center;
+  font-size: var(--fs-18);
+  font-weight: var(--fw-semi);
+}
+.person-hero__name { font-size: var(--fs-18); font-weight: var(--fw-semi); }
+.person-hero__meta { margin-top: var(--sp-1); display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; font-size: var(--fs-12); color: var(--text-2); }
+
+.acct-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+}
+.acct-row + .acct-row { border-top: 1px solid var(--gray-100); }
+.acct-row__k { flex: none; width: 68px; font-size: var(--fs-12); color: var(--text-3); }
+.acct-row__v { flex: 1 1 auto; min-width: 0; font-size: var(--fs-13); }
+
+/* ----------------------------------------  P-ADM-06 分组详情页 */
+
+.member-row { display: flex; align-items: center; gap: var(--sp-3); }
+.member-row__av {
+  width: 28px; height: 28px; flex: none;
+  border-radius: var(--r-full);
+  background: var(--bg-muted);
+  color: var(--text-2);
+  display: grid; place-items: center;
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+}
+
+/* ----------------------------------------  P-ADM-30/31 操作审计 */
+
+.audit-ev {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+}
+.audit-ev__code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  color: var(--brand-700);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  border-radius: var(--r-4);
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+.domain-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 var(--sp-2);
+  border-radius: var(--r-4);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.domain-pill--a { background: var(--brand-50);  color: var(--brand-700); }
+.domain-pill--b { background: var(--green-50);  color: var(--green-700); }
+.domain-pill--c { background: var(--amber-50);  color: var(--amber-700); }
+.domain-pill--d { background: #f1ecf7;          color: #5b4380; }
+.domain-pill--e { background: #e8f4f4;          color: #2f716f; }
+.domain-pill--f { background: #fdeef4;          color: #8a4f5d; }
+
+/* 三维度操作身份：不合并为一个「操作人」 */
+.identity3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: var(--r-8);
+  overflow: hidden;
+}
+.identity3__cell { padding: var(--sp-3) var(--sp-4); min-width: 0; }
+.identity3__cell + .identity3__cell { border-left: 1px solid var(--border); }
+.identity3__k { font-size: var(--fs-11); color: var(--text-3); }
+.identity3__v { margin-top: var(--sp-1); font-size: var(--fs-13); font-weight: var(--fw-medium); }
+
+@media (max-width: 860px) {
+  .identity3 { grid-template-columns: minmax(0, 1fr); }
+  .identity3__cell + .identity3__cell { border-left: none; border-top: 1px solid var(--border); }
+}
+
+/* ----------------------------------------  P-ADM-36 事件清单 */
+
+.catalog-domain { }
+.catalog-domain + .catalog-domain { margin-top: var(--sp-4); }
+.catalog-domain__head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-8) var(--r-8) 0 0;
+}
+.catalog-domain__body { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--r-8) var(--r-8); }
+
+/* ----------------------------------------  空态占位页 */
+
+.placeholder-wrap { max-width: 620px; margin: var(--sp-10) auto; }
+
+/* ----------------------------------------  组件总览页 */
+
+.gallery { display: flex; flex-direction: column; gap: var(--sp-6); }
+.gal {
+  border: 1px solid var(--border);
+  border-radius: var(--r-8);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.gal__head {
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+.gal__id { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--brand-700); font-weight: var(--fw-semi); }
+.gal__t { font-size: var(--fs-14); font-weight: var(--fw-semi); }
+.gal__rule { font-size: var(--fs-11); color: var(--text-2); margin-left: auto; text-align: right; max-width: 460px; line-height: 1.5; }
+.gal__body { padding: var(--sp-5); }
+.gal__row {
+  display: flex; align-items: center; gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.gal__row + .gal__row { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px dashed var(--border); }
+.gal__label { flex: none; width: 168px; font-size: var(--fs-12); color: var(--text-3); }
+.gal__demo { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }

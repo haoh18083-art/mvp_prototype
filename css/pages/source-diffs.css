@@ -1,0 +1,67 @@
+/* ==========================================================================
+   P-ADM-26 来源差异 · 页面级样式
+   详情已改为右侧抽屉（B.drawer + B.sect/B.facts，见 batch2.css）。
+   本文件只保留抽屉内「来源三态对照 / 处理结果 / 相关核对」内容样式。
+   ========================================================================== */
+
+/* 来源三态对照：抽屉窄栏内纵向堆叠，末栏为本地结果并高亮 */
+.sd-compare {
+  display: grid;
+  gap: 10px;
+}
+.sd-cell {
+  border: 1px solid var(--border);
+  border-radius: var(--r-6);
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+}
+.sd-cell--local {
+  background: var(--brand-50);
+}
+.sd-cell__k {
+  display: block;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 5px;
+}
+.sd-cell p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.sd-cell .badge {
+  margin-top: 8px;
+}
+
+/* 处理结果 */
+.sd-result__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green-600);
+}
+.sd-result__text {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-1);
+}
+
+/* 相关核对 */
+.sd-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 历史 / 表单在抽屉内的间距收敛 */
+.sd-history .b2-empty {
+  padding: 20px 0;
+}
+.b2-drawer #diff-form {
+  margin: 0;
+}

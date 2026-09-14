@@ -1,0 +1,10 @@
+.DS_Store
+._*
+.env
+.env.*
+!.env.example
+node_modules/
+_site/
+test-results/
+playwright-report/
+*.log

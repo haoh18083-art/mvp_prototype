@@ -1,0 +1,8 @@
+/* P-SLS-04: 客户查重结果 */
+.b3[data-page="P-SLS-04"] .b2-table td:first-child:not(.b2-check) {
+  min-width: 210px;
+}
+.b3[data-page="P-SLS-04"] .b3-form {
+  max-width: 960px;
+  margin-inline: auto;
+}

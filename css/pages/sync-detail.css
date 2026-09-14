@@ -1,0 +1,6 @@
+.b2[data-page="P-ADM-24"] #sync-content {
+  margin-top: 16px;
+}
+.b2[data-page="P-ADM-24"] #run-types .b2-table td:last-child {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,457 @@
+/* Business pages extend the established batch 2 shell and controls. */
+.b3-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.b3-choice .b2-sub {
+  display: block;
+}
+.b3-search-form .b3-form-grid {
+  align-items: center;
+}
+.b3-search-form .field {
+  margin: 0;
+}
+.b3 .sc-page-head {
+  margin-bottom: 20px;
+}
+.b3 .b3-persona {
+  width: 108px;
+  flex: none;
+}
+.b3-loading {
+  min-height: 100px;
+}
+.b3-form {
+  background: #fff;
+  padding: 20px;
+}
+.b3-form .field {
+  margin-bottom: 18px;
+}
+.b3-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.b3-form-block {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.b3-form-block h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.b3-form-block .b2-sub {
+  margin-bottom: 12px;
+}
+.b3-approval-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.3fr) minmax(130px, 0.7fr) minmax(150px, 1fr)
+    minmax(150px, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  background: white;
+}
+.b3-approval-row .field {
+  margin: 0;
+}
+.b3-approval-row .b2-entity {
+  min-width: 0;
+}
+.b3-approval-row .textarea {
+  min-height: 60px;
+}
+.b3-approval-extra {
+  grid-column: 2/-1;
+}
+.b3-approval-row.is-done {
+  background: #f8faf9;
+  color: var(--text-2);
+}
+.b3-process {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  border-block: 1px solid var(--border);
+  background: #fff;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.b3-process span {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.b3-process b {
+  font-size: 13px;
+  color: var(--text-1);
+}
+.b3-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+.b3-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  color: var(--text-1);
+  min-height: 80px;
+}
+.b3-nav-item:hover {
+  border-color: var(--brand-300);
+  background: #f7fafc;
+}
+.b3-nav-item b {
+  font-size: 13px;
+}
+.b3-nav-item .b3-count {
+  font-size: 23px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.b3-nav-item svg {
+  color: var(--accent);
+}
+.b3-state-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 1fr));
+  gap: 10px;
+}
+.b3-state-columns > span {
+  min-width: 0;
+}
+.b3-state-columns small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.b3-space-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(310px, 1.8fr) auto;
+  gap: 20px;
+  padding: 18px 20px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+.b3-space-row:last-child {
+  border-bottom: 0;
+}
+.b3-scope {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: #fff;
+  border-block: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.b3-scope h2 {
+  font-size: 20px;
+  line-height: 1.5;
+}
+.b3-scope .scope-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.b3-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.5fr);
+  gap: 20px;
+}
+.b3-record {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  background: white;
+}
+.b3-record h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.b3-record p {
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.b3-record footer {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text-2);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.b3-decision-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: white;
+}
+.b3-identity-check {
+  padding: 16px 20px;
+  border-left: 3px solid var(--amber-600);
+  background: var(--amber-50);
+  margin-top: 20px;
+}
+.b3-bar-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 60px;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+}
+.b3-bar-track {
+  height: 8px;
+  background: #edf1f4;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.b3-bar-track i {
+  display: block;
+  height: 100%;
+  background: #3d78ab;
+}
+.b3-transfer-target {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 18px 20px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+.b3-transfer-target .field {
+  margin-bottom: 0;
+}
+.b3-result-level {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  background: white;
+}
+.b3-result-level h3 {
+  margin-bottom: 12px;
+}
+.b3-readonly {
+  border-left: 3px solid var(--gray-500);
+  background: #f0f3f5;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.b3-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.b3-table-tools {
+  background: #fff;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+}
+.b3 .b2-table th .badge {
+  font-size: 10px;
+}
+.b3 .b2-table td .select {
+  min-width: 160px;
+}
+.b3 .select[multiple] {
+  min-height: 96px;
+}
+.b3 .b3-empty-band {
+  padding: 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+.b3 .sc-user__meta {
+  white-space: nowrap;
+}
+@media (max-width: 1180px) {
+  .b3-nav-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .b3 .sc-user {
+    display: none;
+  }
+  .b3-approval-row {
+    grid-template-columns: minmax(150px, 1fr) minmax(110px, 1fr) minmax(
+        130px,
+        1fr
+      );
+  }
+  .b3-approval-row > .field:last-child {
+    grid-column: 2/-1;
+  }
+  .b3-space-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+@media (max-width: 760px) {
+  .b3-nav-grid,
+  .b3-form-grid,
+  .b3-two-col,
+  .b3-transfer-target {
+    grid-template-columns: 1fr;
+  }
+  .b3-approval-row {
+    grid-template-columns: 1fr;
+    padding: 16px 12px;
+  }
+  .b3-approval-extra,
+  .b3-approval-row > .field:last-child {
+    grid-column: auto;
+  }
+  .b3-decision-footer {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .b3 .b3-persona {
+    width: 78px;
+  }
+  .b3 .sc-top {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .b3-state-columns {
+    grid-template-columns: 1fr;
+  }
+  .b3-bar-row {
+    grid-template-columns: 90px 1fr 40px;
+    gap: 10px;
+  }
+  .b3-scope {
+    padding: 14px;
+  }
+  .b3-scope h2 {
+    font-size: 18px;
+  }
+  .b3-form {
+    padding: 16px 12px;
+  }
+  .b3-nav-grid {
+    padding: 0 12px 12px;
+  }
+  .b3 .sc-crumb {
+    max-width: 100%;
+  }
+  .b3-record {
+    padding: 16px 12px;
+  }
+}
+
+/* ==========================================================================
+   经营组合详情 · 右侧抽屉（在任意 batch3 页面就地滑出，替代原独立页）
+   内容为 T.views.combo 输出；此处按抽屉语境扁平化外壳、收紧留白、突出数字。
+   ========================================================================== */
+.combo-detail-drawer .b2-drawer__body {
+  padding: 0;
+}
+.combo-detail-drawer .b3-scope {
+  padding: 16px 22px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.combo-detail-drawer .b3-scope h2 {
+  font-size: 18px;
+  line-height: 1.35;
+}
+.combo-detail-drawer .b2-section {
+  margin-top: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.combo-detail-drawer .b2-section__head {
+  padding: 14px 22px 10px;
+}
+.combo-detail-drawer .b2-section__head h2 {
+  font-size: 13px;
+}
+.combo-detail-drawer .b2-section__body {
+  padding: 0 22px 16px;
+}
+/* 指标带：大号数字为主体，左侧成组 */
+.combo-detail-drawer .cmb-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.combo-detail-drawer .cmb-metrics .b2-stat {
+  padding: 10px 18px;
+  min-width: 104px;
+}
+.combo-detail-drawer .cmb-metrics .b2-stat__value {
+  font-size: 22px;
+  margin-top: 4px;
+}
+.combo-detail-drawer .cmb-stat--alert .b2-stat__value {
+  color: var(--red-600);
+}
+/* 三态成组为一排 chip */
+.combo-detail-drawer .b3-state-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+}
+.combo-detail-drawer .b3-state-columns > span {
+  min-width: 0;
+}
+.combo-detail-drawer .b3-state-columns small {
+  margin-bottom: 6px;
+}
+/* 各池空间行：抽屉较窄，改为纵向堆叠 */
+.combo-detail-drawer .b3-space-row {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 14px 22px;
+}
+/* 空态：收成紧凑一行，去掉填充性说明小字 */
+.combo-detail-drawer .b2-empty {
+  padding: 18px;
+}
+.combo-detail-drawer .b2-empty svg {
+  width: 20px;
+  height: 20px;
+  margin: 0 auto 6px;
+}
+.combo-detail-drawer .b2-empty h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.combo-detail-drawer .b2-empty p {
+  display: none;
+}
+.combo-detail-drawer .b2-drawer__foot {
+  padding: 14px 22px;
+}

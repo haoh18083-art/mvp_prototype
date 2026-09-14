@@ -1,0 +1,8 @@
+/* P-SLS-06: 商机申请 */
+.b3[data-page="P-SLS-06"] .b2-table td:first-child:not(.b2-check) {
+  min-width: 210px;
+}
+.b3[data-page="P-SLS-06"] .b3-form {
+  max-width: 960px;
+  margin-inline: auto;
+}

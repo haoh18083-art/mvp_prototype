@@ -1,0 +1,99 @@
+/* ==========================================================================
+   P-CMN-06 客户工作空间 · 页面级样式
+   目标：数字/状态承担视觉权重、收紧外壳与留白、状态成组、去掉填充性说明小字。
+   仅作用于本页（scoped），不影响其它 batch3 页面。
+   ========================================================================== */
+.b3[data-page="P-CMN-06"] .sc-content {
+  padding-top: 16px;
+}
+.b3[data-page="P-CMN-06"] .b2-table td:first-child {
+  min-width: 210px;
+}
+.b3[data-page="P-CMN-06"] .b3-form {
+  border-top: 1px solid var(--border);
+}
+
+/* Hero：一行、收紧高度 */
+.b3[data-page="P-CMN-06"] .b3-scope {
+  padding: 16px 20px;
+}
+.b3[data-page="P-CMN-06"] .b3-scope h2 {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+/* 只读条：收紧 */
+.b3[data-page="P-CMN-06"] .b3-readonly {
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+/* 区块：更紧的堆叠 + 更轻的标题栏 */
+.b3[data-page="P-CMN-06"] .b2-section {
+  margin-top: 12px;
+}
+.b3[data-page="P-CMN-06"] .b2-section__head {
+  padding: 12px 20px;
+}
+.b3[data-page="P-CMN-06"] .b2-section__body {
+  padding: 0 20px 16px;
+}
+
+/* 空间 / 绑定 / 实例三态：成组聚拢为一排 chip，避免整幅平铺 */
+.b3[data-page="P-CMN-06"] .b3-state-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+}
+.b3[data-page="P-CMN-06"] .b3-state-columns > span {
+  min-width: 0;
+}
+.b3[data-page="P-CMN-06"] .b3-state-columns small {
+  margin-bottom: 6px;
+}
+
+/* 授权记录：收紧记录卡 */
+.b3[data-page="P-CMN-06"] .b3-record {
+  padding: 16px 20px;
+}
+.b3[data-page="P-CMN-06"] .b3-record p {
+  line-height: 1.7;
+}
+
+/* 空态：收成紧凑一行，去掉填充性说明小字 */
+.b3[data-page="P-CMN-06"] .b2-empty {
+  padding: 20px;
+}
+.b3[data-page="P-CMN-06"] .b2-empty svg {
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 6px;
+}
+.b3[data-page="P-CMN-06"] .b2-empty h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.b3[data-page="P-CMN-06"] .b2-empty p {
+  display: none;
+}
+
+/* 商机详情：沿用详情内容，在空间内从右侧滑入。 */
+.workspace-opportunity-drawer.is-open { background: rgba(17, 24, 39, .24); }
+.workspace-opportunity-drawer .b2-drawer { box-shadow: -8px 0 28px rgba(17, 24, 39, .12); }
+.workspace-opportunity-drawer .b2-drawer__body { padding: 20px 24px 28px; }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b3-scope { padding: 0 0 20px; border: 0; align-items: flex-start; gap: 12px; }
+.workspace-opportunity-drawer .b3-scope .u-grow { flex-basis: 240px; min-width: 0; overflow-wrap: anywhere; }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b2-section { margin-top: 0; border: 0; border-top: 1px solid var(--border); }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b2-section__head { padding: 18px 0 12px; }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b2-section__body { padding: 0 0 20px; }
+.workspace-opportunity-drawer .b2-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; margin: 0; }
+.workspace-opportunity-drawer .b2-kv > div { min-width: 0; }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b3-record { padding: 12px 0; }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b2-empty { padding: 12px 0 0; text-align: left; }
+.b3[data-page="P-CMN-06"] .workspace-opportunity-drawer .b2-empty svg { display: none; }
+@media (max-width: 480px) {
+  .workspace-opportunity-drawer .b2-drawer__body { padding: 16px; }
+  .workspace-opportunity-drawer .b3-scope .u-grow { flex-basis: 180px; }
+  .workspace-opportunity-drawer .b2-kv { column-gap: 16px; }
+}

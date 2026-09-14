@@ -1,0 +1,7 @@
+.b2[data-page="P-ADM-12"] .b2-form {
+  max-width: 760px;
+  border-top: 2px solid var(--accent);
+}
+.b2[data-page="P-ADM-12"] .b2-form .textarea {
+  min-height: 160px;
+}

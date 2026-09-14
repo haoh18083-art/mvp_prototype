@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>销售指挥官 V1.0</title>
+<!-- 「留痕待补」已并入操作审计页签，此页保留为跳转入口，兼容旧链接与书签 -->
+<script>
+  (function () {
+    var p = new URLSearchParams(location.search);
+    p.set('tab', 'pending');
+    location.replace('audit-query.html?' + p.toString());
+  })();
+</script>
+</head>
+<body>
+<noscript><a href="audit-query.html?tab=pending">前往操作审计 · 留痕待补</a></noscript>
+</body>
+</html>

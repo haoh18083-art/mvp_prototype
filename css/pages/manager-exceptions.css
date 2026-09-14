@@ -1,0 +1,7 @@
+/* P-MGR-11: 异常处理 */
+.b3[data-page="P-MGR-11"] .b2-table td:first-child:not(.b2-check) {
+  min-width: 230px;
+}
+.b3[data-page="P-MGR-11"] .b3-form {
+  border-top: 1px solid var(--border);
+}

@@ -1,0 +1,78 @@
+/* ==========================================================================
+   P-ADM-05 销售分组 · 页面级样式
+   仅定义本页三个自定义单元格（grp-* 作用域），不改动 batch2 共享样式。
+   ========================================================================== */
+
+/* 销售主管身份单元格 */
+.grp-mgr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.grp-mgr__av {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--bg-muted);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.grp-mgr__name {
+  font-weight: 500;
+  color: var(--text-1);
+}
+.grp-mgr__role {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+/* 销售数：单一主指标 */
+.grp-count b {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.grp-count span {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-left: 3px;
+}
+
+/* 经营规模：三项迷你指标合并为一格，替代原来铺开的三列稀疏数字 */
+.grp-metrics {
+  display: flex;
+  gap: 20px;
+}
+.grp-metrics > div {
+  min-width: 0;
+}
+.grp-metrics__v {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.grp-metrics__k {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+/* 待分组销售表格的进入时间，弱化处理 */
+.grp-time {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .grp-metrics {
+    gap: 14px;
+  }
+}

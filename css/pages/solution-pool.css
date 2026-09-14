@@ -1,0 +1,7 @@
+/* P-SOL-01: 我的客户池 */
+.b3[data-page="P-SOL-01"] .b2-table td:first-child {
+  min-width: 230px;
+}
+.b3[data-page="P-SOL-01"] .b3-form {
+  border-top: 1px solid var(--border);
+}

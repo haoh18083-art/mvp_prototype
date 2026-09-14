@@ -1,0 +1,84 @@
+/* ==========================================================================
+   P-CMN-05 经营组合详情 · 页面级样式
+   目标：数字承担视觉权重、收紧外壳与留白、状态成组、去掉填充性说明小字。
+   仅作用于本页（scoped），不影响其它 batch3 页面。
+   ========================================================================== */
+.b3[data-page="P-CMN-05"] .b2-table td:first-child {
+  min-width: 210px;
+}
+.b3[data-page="P-CMN-05"] .b3-form {
+  border-top: 1px solid var(--border);
+}
+
+/* Hero：一行、收紧高度、与工作空间保持一致的图标 */
+.b3[data-page="P-CMN-05"] .b3-scope {
+  padding: 16px 20px;
+}
+.b3[data-page="P-CMN-05"] .b3-scope h2 {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+/* 区块：更紧的堆叠 + 更轻的标题栏 */
+.b3[data-page="P-CMN-05"] .b2-section {
+  margin-top: 12px;
+}
+.b3[data-page="P-CMN-05"] .b2-section__head {
+  padding: 12px 20px;
+}
+.b3[data-page="P-CMN-05"] .b2-section__body {
+  padding: 0 20px 16px;
+}
+
+/* 指标带：大号数字为主体，左侧成组，不再整幅平铺 */
+.b3[data-page="P-CMN-05"] .cmb-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.b3[data-page="P-CMN-05"] .cmb-metrics .b2-stat {
+  padding: 12px 22px;
+  min-width: 128px;
+}
+.b3[data-page="P-CMN-05"] .cmb-metrics .b2-stat__value {
+  font-size: 24px;
+  margin-top: 6px;
+}
+.b3[data-page="P-CMN-05"] .cmb-stat--alert .b2-stat__value {
+  color: var(--red-600);
+}
+
+/* 三态：成组聚拢为一排 chip，避免横铺稀释 */
+.b3[data-page="P-CMN-05"] .b3-state-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+}
+.b3[data-page="P-CMN-05"] .b3-state-columns > span {
+  min-width: 0;
+}
+.b3[data-page="P-CMN-05"] .b3-state-columns small {
+  margin-bottom: 6px;
+}
+
+/* 空态：收成紧凑一行，去掉填充性说明小字 */
+.b3[data-page="P-CMN-05"] .b2-empty {
+  padding: 20px;
+}
+.b3[data-page="P-CMN-05"] .b2-empty svg {
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 6px;
+}
+.b3[data-page="P-CMN-05"] .b2-empty h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.b3[data-page="P-CMN-05"] .b2-empty p {
+  display: none;
+}
