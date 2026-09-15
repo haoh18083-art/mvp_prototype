@@ -4,7 +4,7 @@
 
 ## 1. 打开方式
 
-公网访问：[销售指挥官原型](https://haoh18083-art.github.io/sales-commander-prototype/) ｜ [GitHub 仓库](https://github.com/haoh18083-art/sales-commander-prototype) ｜ [版本管理与自动发布说明](DEPLOYMENT.md)。推送到 `main` 分支后自动更新公网页面。
+公网访问：[销售指挥官原型](https://haoh18083-art.github.io/mvp_prototype/) ｜ [GitHub 仓库](https://github.com/haoh18083-art/mvp_prototype) ｜ [版本管理与自动发布说明](DEPLOYMENT.md)。推送到 `main` 分支后自动更新公网页面。
 
 直接打开 [原型导航](index.html)，或进入[超管客保裁决台](pages/verdict.html)、[主管工作台](pages/manager-home.html)、[销售工作台](pages/sales-home.html)、[方案人员客户池](pages/solution-pool.html)。批 2 的[CRM数据管理](pages/reconcile.html)和[客户池管理](pages/pools.html)继续可用。无需本地服务器、无构建步骤、无运行时联网依赖；Lucide 图标与许可证已保存在 `js/vendor/`。
 

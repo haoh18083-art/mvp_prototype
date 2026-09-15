@@ -1,8 +1,8 @@
 # GitHub 版本管理与公网发布
 
-- GitHub 仓库：https://github.com/haoh18083-art/sales-commander-prototype
-- 公网原型：https://haoh18083-art.github.io/sales-commander-prototype/
-- 发布记录：https://github.com/haoh18083-art/sales-commander-prototype/actions
+- GitHub 仓库：https://github.com/haoh18083-art/mvp_prototype
+- 公网原型：https://haoh18083-art.github.io/mvp_prototype/
+- 发布记录：https://github.com/haoh18083-art/mvp_prototype/actions
 - 主分支：`main`
 
 ## 更新原型
