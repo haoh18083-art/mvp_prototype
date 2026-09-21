@@ -1,0 +1,51 @@
+/* 收件箱：分段切换、行展开、生成待办后的详情区。 */
+.inbox-section { padding: 22px 24px 24px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.inbox-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 17px; border-bottom: 1px solid var(--border); }
+.inbox-title { display: flex; align-items: center; gap: 10px; }
+.inbox-title h2 { font-size: 20px; }
+.unread-total { min-width: 23px; height: 23px; display: inline-grid; place-items: center; padding: 0 7px; border-radius: 12px; color: var(--accent); background: var(--soft-blue); font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+.segmented { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--bg); }
+.segmented button { min-width: 78px; height: 30px; padding: 0 12px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 12px; transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); }
+.segmented button.is-active { color: var(--fg); background: var(--surface); box-shadow: 0 1px 3px color-mix(in oklab, var(--fg), transparent 90%); font-weight: 650; }
+.inbox-list { display: grid; }
+.inbox-item { border-bottom: 1px solid var(--border); }
+.inbox-item:last-child { border-bottom: 0; }
+.space-link { display: flex; align-items: center; justify-content: space-between; min-height: 31px; padding: 9px 12px 2px; color: var(--accent); font-size: 11px; font-weight: 650; }
+.space-link span { display: inline-flex; align-items: center; gap: 5px; }
+.inbox-row { position: relative; display: flex; align-items: center; gap: 14px; min-height: 70px; padding: 13px 4px; cursor: pointer; transition: background var(--motion-fast) var(--ease-standard); }
+.inbox-row:hover { background: var(--bg); }
+.inbox-type { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; color: var(--accent); background: var(--soft-blue); }
+.inbox-type.policy { color: color-mix(in oklab, var(--warn), var(--fg) 48%); background: var(--soft-yellow); }
+.inbox-type.material { color: color-mix(in oklab, var(--success), var(--fg) 24%); background: var(--soft-green); }
+.inbox-main { min-width: 0; flex: 1; }
+.inbox-title-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.inbox-title-line strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 650; }
+.unread-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--accent); }
+.inbox-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.inbox-meta .type-label { color: var(--fg); }
+.inbox-time { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.inbox-chevron { width: 18px; height: 18px; flex: 0 0 auto; color: var(--muted); transition: transform var(--motion-base) var(--ease-standard), color var(--motion-base) var(--ease-standard); }
+.inbox-item.is-expanded .inbox-chevron { color: var(--accent); transform: rotate(180deg); }
+/* 与跟进卡相同：用网格行高做展开，避免 max-height 抖动。 */
+.inbox-detail { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 280ms var(--ease-standard), opacity 180ms var(--ease-standard); }
+.inbox-detail > div { overflow: hidden; }
+.inbox-item.is-expanded .inbox-detail { grid-template-rows: 1fr; opacity: 1; }
+.inbox-detail-content { margin: 0 4px 16px 48px; padding: 16px 18px 17px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.detail-tag { display: inline-flex; align-items: center; height: 23px; padding: 0 8px; border-radius: 5px; color: var(--accent); background: var(--soft-blue); font-size: 11px; font-weight: 650; }
+.detail-tag.policy { color: color-mix(in oklab, var(--warn), var(--fg) 48%); background: var(--soft-yellow); }
+.detail-customer { color: var(--muted); font-size: 11px; }
+.detail-copy { color: var(--fg); font-size: 13px; line-height: 1.7; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+.btn { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border: 1px solid transparent; border-radius: var(--radius-sm); font-size: 12px; font-weight: 650; transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { color: var(--accent-on); background: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { color: var(--fg); border-color: var(--border); background: var(--surface); }
+.btn-secondary:hover { border-color: color-mix(in oklab, var(--accent), var(--border) 55%); color: var(--accent); }
+.btn-quiet { color: var(--muted); background: transparent; }
+.btn-quiet:hover { color: var(--fg); background: var(--surface); }
+.empty-state { display: grid; justify-items: center; gap: 8px; padding: 38px 20px 30px; color: var(--muted); text-align: center; }
+.empty-state svg { width: 28px; height: 28px; color: var(--accent); }
+.empty-state strong { color: var(--fg); font-size: 13px; }
+.empty-state p { max-width: 300px; font-size: 12px; }

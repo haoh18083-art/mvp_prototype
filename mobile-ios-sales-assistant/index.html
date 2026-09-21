@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>销售移动端 · iOS 原型</title>
+  <link rel="stylesheet" href="css/shared.css?v=20260921-r0910">
+</head>
+<body>
+  <!-- 独立入口只暴露本次导入的 iOS 版本，避免误把远程分支中的其他端当作本地 V0.2 页面。 -->
+  <main class="route-page" data-od-id="ios-sales-assistant-entry">
+    <div class="route-wrap">
+      <p class="route-kicker">SALES ASSISTANT · IOS</p>
+      <h1>销售移动端 iOS 原型</h1>
+      <p>R09 销售移动端：今日 / 客户 / 相关 / 我的四个入口、客户空间五个 Tab、跟进与周复盘写入、离线草稿与并发处理。业务数据与网页端同一份，不做分端存储。</p>
+      <div class="route-grid">
+        <a class="route-card" href="pages/mobile-ios.html" data-od-id="ios-today-entry">
+          <span class="route-number">01 / TODAY</span>
+          <h2>移动端四入口</h2>
+          <p>今日（本周经营 / 今天该跟 / 收件箱）、客户搜索、相关工作台、我的；本人助手悬浮入口常驻。</p>
+          <span class="route-link">打开移动端 <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="route-card" href="pages/mobile-ios-chat.html" data-od-id="ios-chat-entry">
+          <span class="route-number">02 / CHAT</span>
+          <h2>本人助手对话页</h2>
+          <p>本人助手对话入口，可独立打开或由悬浮入口覆盖层加载；客户空间内的问答由空间助手承接。</p>
+          <span class="route-link">打开本人助手 <span aria-hidden="true">→</span></span>
+        </a>
+      </div>
+      <p class="route-foot"><a href="../index.html">← 返回 V0.2 登录入口</a> · 仅用于本地原型评审</p>
+    </div>
+  </main>
+</body>
+</html>

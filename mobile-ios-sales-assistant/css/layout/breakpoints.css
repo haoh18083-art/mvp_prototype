@@ -1,0 +1,31 @@
+/* 断点：平板收紧边距，窄屏隐藏侧栏并改单列。 */
+@media (max-width: 1023px) {
+  .desktop-topbar { padding: 0 24px; }
+  .content { padding-left: 24px; padding-right: 24px; }
+}
+@media (max-width: 760px) {
+  .sidebar { display: none; }
+  .main-shell { width: 100%; margin-left: 0; }
+  .desktop-topbar { display: none; }
+  .content { padding: 24px 16px 88px; }
+  .page-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .page-heading-meta { width: 100%; justify-content: space-between; }
+  .follow-grid { grid-template-columns: 1fr; }
+  .inbox-section { padding: 18px 16px 18px; }
+  .inbox-header { align-items: flex-start; flex-direction: column; gap: 13px; }
+  .segmented { width: 100%; }
+  .segmented button { flex: 1; }
+  .inbox-detail-content { margin-left: 0; }
+  .fab { right: 16px; bottom: 84px; }
+  .route-grid { grid-template-columns: 1fr; }
+  .route-page { padding: 36px 16px; }
+  .route-card { min-height: 160px; }
+}
+@media (min-width: 1024px) and (max-width: 1260px) {
+  .content { padding-left: 28px; padding-right: 28px; }
+}
+@media (max-width: 390px) {
+  .mobile-content { padding-left: 12px; padding-right: 12px; }
+  .mobile-topbar { padding-left: 14px; padding-right: 14px; }
+  .mobile-inbox { padding-left: 12px; padding-right: 12px; }
+}

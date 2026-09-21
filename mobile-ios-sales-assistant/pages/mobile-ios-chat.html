@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>本人助手 · 工作对话</title>
+  <!--
+    本人助手对话页 · 销售工作 Agent 设计
+    - 视觉底层与移动端主 UI 同源：#2f6feb 主色、#fafafa/#ffffff 底、系统黑体、12/14 圆角。
+    - 交互概念：对话是带时间栏的工作条目；工作计划是可折叠的「执行计划」卡（逐步打卡），
+      工具调用产出「过程产物/回执」卡，敏感操作先「确认」再执行，引用以脚注回溯来源。
+    - 自包含单文件（不引 shared.css），既可被首页 iframe 嵌入，也可独立打开。
+    - 对外契约保持不变：返回按钮 data-chat-back、嵌入时 postMessage sales-chat-close、
+      data-od-id=ios-chat-page/header/body/input、data-chat-field/send/suggestion/feedback。
+  -->
+  <style>
+    /* ===== 设计 token：与移动端主 UI（css/base/tokens.css）同源 ===== */
+    :root {
+      --font-sans: "Microsoft YaHei", "PingFang SC", -apple-system, system-ui, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+      --paper: #fafafa; --paper-2: #ffffff;
+      --ink: #111111; --ink-2: #6b6b6b; --ink-3: #9a9a9a;
+      --line: #e5e5e5; --line-2: #efefef;
+      --seal: #2f6feb; --seal-on: #ffffff; --seal-soft: color-mix(in oklab, #2f6feb, #ffffff 92%);
+      --ok: #17a34a; --run: #2f6feb;
+      --r-s: 8px; --r-m: 12px;
+      --sh-1: 0 2px 8px color-mix(in oklab, #111111, transparent 92%);
+      --sh-2: 0 2px 6px color-mix(in oklab, #111111, transparent 90%), 0 16px 38px color-mix(in oklab, #111111, transparent 84%);
+      --ease: cubic-bezier(.2, 0, 0, 1); --ease-spring: cubic-bezier(.34, 1.4, .4, 1);
+      --d-f: 150ms; --d-m: 200ms; --d-s: 360ms;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { font-family: var(--font-sans); background: #eceff3; color: var(--ink); -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+    button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    /* 手机画布：独立打开时桌面浏览器居中显示 430×932 机身；iframe 内（≤430px）自动铺满 */
+    .fn-page { position: relative; display: flex; flex-direction: column; height: 100dvh; max-width: 430px; margin: 0 auto; background: var(--paper); overflow: hidden; transition: background var(--d-m); }
+    @media (min-width: 560px) and (min-height: 640px) {
+      body { display: grid; place-items: center; background: #eceff3 radial-gradient(1200px 600px at 50% -10%, color-mix(in oklab, #2f6feb, transparent 88%), transparent 60%); }
+      .fn-page { height: min(932px, 96vh); border: 1px solid #d7dde6; border-radius: 34px; box-shadow: 0 40px 90px rgba(17, 24, 39, .28); }
+    }
+
+    /* ===== 顶栏 ===== */
+    .fn-topbar { position: relative; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: color-mix(in oklab, var(--paper) 86%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    .fn-back { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--ink); background: transparent; }
+    .fn-back:active { background: var(--line-2); }
+    .fn-back svg { width: 20px; height: 20px; }
+    .fn-title strong { display: block; font-size: 16px; font-weight: 600; letter-spacing: .01em; }
+    .fn-title span { display: block; margin-top: 1px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; color: var(--ink-3); }
+    .fn-branch { margin-left: auto; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper-2); color: var(--ink-2); font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; }
+    .fn-branch[hidden] { margin-left: auto; }
+
+    /* ===== 消息流 ===== */
+    .fn-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 12px 16px 26px; }
+
+    /* 欢迎区 */
+    .fn-welcome { padding: 7vh 2px 0; animation: fn-in var(--d-s) var(--ease) both; }
+    .fn-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; color: var(--seal); }
+    .fn-welcome h1 { margin-top: 10px; font-size: 28px; font-weight: 700; line-height: 1.32; letter-spacing: -.01em; }
+    .fn-welcome .fn-sub { margin-top: 10px; max-width: 320px; font-size: 13px; line-height: 1.75; color: var(--ink-2); }
+    .fn-chips { display: flex; flex-direction: column; gap: 8px; margin-top: 22px; }
+    .fn-chip { display: flex; align-items: center; gap: 10px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper-2); color: var(--ink); font-size: 13.5px; text-align: left; box-shadow: var(--sh-1); transition: transform var(--d-f) var(--ease); }
+    .fn-chip:active { transform: scale(.98); }
+    .fn-chip > svg { flex: 0 0 auto; color: var(--seal); }
+    .fn-chip small { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); letter-spacing: .04em; }
+
+    /* 条目：左侧等宽时间栏，非气泡 */
+    .fn-entry { display: grid; grid-template-columns: 38px 1fr; gap: 10px; margin-top: 16px; animation: fn-in var(--d-m) var(--ease) both; }
+    .fn-time { padding-top: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+    .fn-main { min-width: 0; }
+    .fn-entry-tools { display: flex; justify-content: flex-end; margin-top: 4px; }
+    .fn-ctx { width: 26px; height: 20px; display: grid; place-items: center; border: 0; border-radius: var(--r-s); background: transparent; color: var(--ink-3); font-family: var(--font-mono); font-size: 13px; letter-spacing: .1em; }
+    /* 用户条目：右侧浅蓝批注 */
+    .fn-user { display: block; }
+    .fn-bubble { width: fit-content; max-width: 86%; margin-left: auto; padding: 10px 13px; border: 1px solid color-mix(in oklab, var(--seal), var(--line) 55%); border-radius: 14px 14px 4px; background: color-mix(in oklab, var(--seal), var(--paper-2) 92%); font-size: 15px; line-height: 1.6; box-shadow: var(--sh-1); }
+    .fn-user-meta { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 5px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); }
+
+    /* 理解目标卡 */
+    .fn-understand { margin-top: 2px; padding: 10px 12px; border-left: 2px solid var(--seal); border-radius: 0 var(--r-m) var(--r-m) 0; background: var(--paper-2); box-shadow: var(--sh-1); font-size: 12.5px; line-height: 1.7; color: var(--ink-2); }
+    .fn-label { margin-bottom: 3px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; color: var(--seal); }
+
+    /* 执行计划卡（可折叠工作逻辑） */
+    .fn-plan { margin-top: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--paper-2); box-shadow: var(--sh-1); }
+    .fn-plan-head { display: flex; align-items: center; gap: 9px; width: 100%; padding: 11px 12px 10px; border: 0; background: none; color: var(--ink); text-align: left; user-select: none; }
+    .fn-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+    .fn-dot-run { background: var(--run); animation: fn-breathe 1.5s ease-in-out infinite; }
+    .fn-dot-done { background: var(--ok); }
+    .fn-dot-fail { background: #dc2626; }
+    .fn-plan-title { display: block; font-size: 13px; font-weight: 600; }
+    .fn-plan-no { display: block; margin-top: 1px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); letter-spacing: .06em; }
+    .fn-plan-elapsed { margin-left: auto; padding-right: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    .fn-chev { flex: 0 0 auto; color: var(--ink-3); transition: transform var(--d-m) var(--ease); }
+    .fn-plan.open .fn-chev { transform: rotate(180deg); }
+    .fn-plan-bar { height: 2px; background: var(--line-2); }
+    .fn-plan-bar i { display: block; width: 0; height: 100%; background: var(--seal); transition: width .3s var(--ease); }
+    .fn-plan.running .fn-plan-bar i { animation: fn-pulse 1.2s ease-in-out infinite; }
+    .fn-steps { display: none; border-top: 1px dashed var(--line); }
+    .fn-plan.open .fn-steps { display: block; }
+    .fn-step { padding: 9px 12px; border-top: 1px solid var(--line-2); }
+    .fn-step:first-child { border-top: 0; }
+    .fn-step-row { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; color: var(--ink); text-align: left; user-select: none; }
+    .fn-stamp { width: 18px; height: 18px; flex: 0 0 auto; display: grid; place-items: center; }
+    .fn-step-name { font-family: var(--font-mono); font-size: 12px; }
+    .fn-step-sum { margin-top: 2px; font-size: 12px; color: var(--ink-2); }
+    .fn-step-dur { margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+    .fn-step-detail { display: none; margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--r-s); background: var(--paper); font-size: 12px; line-height: 1.7; color: var(--ink-2); }
+    .fn-step-detail b { display: block; margin-bottom: 2px; font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: .12em; color: var(--ink-3); }
+    .fn-step.open .fn-step-detail { display: block; }
+    .fn-step.is-fail .fn-step-name { color: #dc2626; }
+    .fn-retry { margin-left: 8px; padding: 3px 10px; border: 1px solid var(--seal); border-radius: 99px; background: var(--seal-soft); color: var(--seal); font-size: 11px; }
+    .fn-spin { width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--run); border-radius: 50%; animation: fn-rot .8s linear infinite; }
+    .fn-wait { width: 13px; height: 13px; border: 1.5px solid var(--line); border-radius: 50%; }
+    .fn-sealcheck { width: 18px; height: 18px; display: grid; place-items: center; border: 1.5px solid var(--seal); border-radius: 50%; color: var(--seal); transform: rotate(-6deg); animation: fn-stamp .38s var(--ease-spring) both; }
+    .fn-sealcheck svg { width: 10px; height: 10px; }
+    .fn-failmark { width: 18px; height: 18px; display: grid; place-items: center; border: 1.5px solid #dc2626; border-radius: 50%; color: #dc2626; font-family: var(--font-mono); font-size: 11px; }
+
+    /* 过程产物 / 回执卡 */
+    .fn-receipt { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-top: 2px dashed var(--line); border-radius: 14px; background: var(--paper-2); box-shadow: var(--sh-1); animation: fn-in var(--d-m) var(--ease) both; }
+    .fn-receipt h4 { margin-bottom: 8px; font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: .16em; color: var(--ink-3); }
+    .fn-receipt li { display: flex; gap: 8px; margin-top: 6px; font-size: 12.5px; line-height: 1.65; color: var(--ink); list-style: none; }
+    .fn-receipt li::before { content: ""; width: 5px; height: 5px; flex: 0 0 auto; margin-top: 7px; border-radius: 50%; background: var(--seal); }
+
+    /* 确认卡：敏感操作先确认再执行 */
+    .fn-sign { position: relative; margin-top: 10px; overflow: hidden; padding: 13px; border: 1.5px solid var(--seal); border-radius: 14px; background: var(--paper-2); box-shadow: var(--sh-1); animation: fn-in var(--d-m) var(--ease) both; }
+    .fn-sign h4 { font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: .16em; color: var(--seal); }
+    .fn-sign dl { display: grid; grid-template-columns: 52px 1fr; gap: 5px 10px; margin-top: 10px; font-size: 12.5px; line-height: 1.6; }
+    .fn-sign dt { padding-top: 1px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+    .fn-sign dd { color: var(--ink); }
+    .fn-sign-actions { display: flex; gap: 10px; margin-top: 13px; }
+    .fn-allow { flex: 1; padding: 11px; border: 0; border-radius: 99px; background: var(--seal); color: var(--seal-on); font-size: 14px; font-weight: 600; letter-spacing: .04em; box-shadow: 0 4px 14px color-mix(in oklab, #2f6feb, transparent 68%); transition: transform var(--d-f) var(--ease-spring); }
+    .fn-allow:active { transform: scale(.96); }
+    .fn-deny { padding: 11px 18px; border: 1px solid var(--line); border-radius: 99px; background: transparent; color: var(--ink-2); font-size: 13px; }
+    .fn-sign.stamped .fn-sign-actions { opacity: .35; pointer-events: none; }
+    .fn-stamp-big { position: absolute; top: 12px; right: 14px; width: 64px; height: 64px; display: grid; place-items: center; border: 2px solid var(--seal); border-radius: 50%; color: var(--seal); font-size: 13px; font-weight: 600; letter-spacing: .1em; transform: rotate(-12deg); animation: fn-stamp .4s var(--ease-spring) both; pointer-events: none; }
+    .fn-stamp-big.deny { border-color: var(--ink-3); color: var(--ink-3); }
+
+    /* 最终答案与脚注 */
+    .fn-answer { margin-top: 10px; font-size: 15px; line-height: 1.78; }
+    .fn-answer p { margin: 0; }
+    .fn-answer p + p { margin-top: 8px; }
+    .fn-cite { padding: 0 1px; border: 0; background: none; color: var(--seal); font-family: var(--font-mono); font-size: 11px; vertical-align: 2px; }
+    .fn-cite:active { opacity: .6; }
+    .fn-caret { display: inline-block; width: 2px; height: 1em; margin-left: 1px; vertical-align: -2px; background: var(--seal); animation: fn-blink .8s steps(1) infinite; }
+
+    /* 系统注记 */
+    .fn-note { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; color: var(--ink-3); }
+    .fn-note::before, .fn-note::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+    /* 骨架屏 */
+    .fn-skel { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper-2); }
+    .fn-skel i { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--line-2), var(--line), var(--line-2)); background-size: 200% 100%; animation: fn-shimmer 1.1s linear infinite; }
+    .fn-skel i:nth-child(2) { width: 82%; } .fn-skel i:nth-child(3) { width: 58%; }
+
+    /* 输入区：吸底 + 安全区 */
+    .fn-composer { border-top: 1px solid var(--line); background: color-mix(in oklab, var(--paper-2) 90%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+    .fn-banner { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 7px 10px; border: 1px dashed var(--seal); border-radius: var(--r-s); background: var(--seal-soft); font-size: 11.5px; color: var(--seal); }
+    .fn-banner button { margin-left: auto; border: 0; background: none; color: var(--seal); font-size: 15px; line-height: 1; }
+    .fn-inputrow { display: flex; align-items: flex-end; gap: 9px; }
+    .fn-field { flex: 1; min-height: 38px; max-height: 120px; resize: none; padding: 9px 13px; border: 1px solid var(--line); border-radius: 19px; outline: 0; background: var(--paper-2); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+    .fn-field:focus { border-color: var(--seal); box-shadow: 0 0 0 3px color-mix(in oklab, var(--seal), transparent 70%); }
+    .fn-field::placeholder { color: var(--ink-3); }
+    .fn-send { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--seal); color: var(--seal-on); box-shadow: 0 4px 12px color-mix(in oklab, #2f6feb, transparent 60%); transition: transform var(--d-f) var(--ease-spring), background var(--d-f); }
+    .fn-send:active { transform: scale(.9); }
+    .fn-send[data-state="stop"] { background: var(--ink); }
+    .fn-send svg { width: 17px; height: 17px; }
+    .fn-composer-note { margin-top: 7px; font-family: var(--font-mono); font-size: 10.5px; text-align: center; color: var(--ink-3); }
+
+    /* 底部弹层（来源 / 消息操作） */
+    .fn-sheet-mask { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; background: rgba(17, 17, 17, .45); animation: fn-fade var(--d-m) both; }
+    .fn-sheet { width: 100%; max-height: 74%; overflow-y: auto; padding: 8px 18px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; background: var(--paper-2); animation: fn-up var(--d-s) var(--ease) both; }
+    .fn-sheet-grab { width: 36px; height: 4px; margin: 4px auto 12px; border-radius: 99px; background: var(--line); }
+    .fn-sheet h3 { font-size: 16px; font-weight: 600; }
+    .fn-src-meta { margin: 6px 0 10px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.7; color: var(--ink-3); }
+    .fn-src-body { font-size: 14px; line-height: 1.85; color: var(--ink); }
+    .fn-actions { display: grid; }
+    .fn-action { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 4px; border: 0; border-bottom: 1px solid var(--line-2); background: none; color: var(--ink); font-size: 14.5px; text-align: left; }
+    .fn-action:last-child { border-bottom: 0; }
+    .fn-action svg { flex: 0 0 auto; width: 17px; height: 17px; color: var(--ink-3); }
+    .fn-action small { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); }
+
+    /* 轻提示 */
+    .fn-toast { position: absolute; top: 14px; left: 50%; z-index: 60; padding: 8px 14px; border-radius: 99px; background: var(--ink); color: var(--paper); font-size: 12px; opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(-8px); transition: opacity var(--d-m) var(--ease), transform var(--d-m) var(--ease); }
+    .fn-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* 动效 */
+    @keyframes fn-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes fn-fade { from { opacity: 0; } }
+    @keyframes fn-up { from { opacity: .4; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+    @keyframes fn-rot { to { transform: rotate(360deg); } }
+    @keyframes fn-blink { 50% { opacity: 0; } }
+    @keyframes fn-breathe { 50% { opacity: .35; transform: scale(.8); } }
+    @keyframes fn-pulse { 50% { opacity: .55; } }
+    @keyframes fn-shimmer { to { background-position: -200% 0; } }
+    @keyframes fn-stamp { 0% { opacity: 0; transform: scale(1.8) rotate(-16deg); } 62% { opacity: 1; transform: scale(.92) rotate(-3deg); } 100% { opacity: 1; transform: scale(1) rotate(-6deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="fn-page" data-od-id="ios-chat-page">
+    <header class="fn-topbar" data-od-id="ios-chat-header">
+      <button class="fn-back" type="button" aria-label="返回" data-chat-back><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+      <div class="fn-title"><strong>本人助手</strong><span>销售作业 AGENT · 过程可审计</span></div>
+      <button class="fn-branch" type="button" data-branch hidden>主线</button>
+    </header>
+    <div class="fn-scroll" data-scroll data-od-id="ios-chat-body">
+      <div class="fn-welcome" data-welcome>
+        <p class="fn-eyebrow" data-eyebrow>2026 年 9 月 15 日 · 本人助手</p>
+        <h1>今天想先处理<br>哪位客户？</h1>
+        <p class="fn-sub">把查进展、梳理风险、发方案这类事交给它。每一步工具调用和确认都留痕，随时可以回看。</p>
+        <div class="fn-chips">
+          <button class="fn-chip" type="button" data-chat-suggestion data-q="星辰科技上次沟通到哪一步了？"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>星辰科技上次沟通到哪一步了？<small>简单问答 · 直接作答并附来源</small></span></button>
+          <button class="fn-chip" type="button" data-chat-suggestion data-q="帮我梳理远山物流这周的推进风险"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>帮我梳理远山物流这周的推进风险<small>多步工具 · 计划、产物与失败重试</small></span></button>
+          <button class="fn-chip" type="button" data-chat-suggestion data-q="把通信线路试点建议发给星辰科技的李女士"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1 5 5-1Z"/><path d="M14 7l3 3"/></svg><span>把通信线路试点建议发给星辰科技的李女士<small>敏感操作 · 先确认再执行</small></span></button>
+        </div>
+      </div>
+      <div data-list></div>
+    </div>
+    <footer class="fn-composer" data-od-id="ios-chat-input">
+      <div class="fn-banner" data-banner hidden><span data-banner-text>编辑重发 · 原消息之后的回复将被替换</span><button type="button" data-banner-cancel aria-label="取消编辑">×</button></div>
+      <div class="fn-inputrow">
+        <textarea class="fn-field" rows="1" placeholder="交代一项销售任务" aria-label="输入问题" data-chat-field></textarea>
+        <button class="fn-send" type="button" data-state="send" aria-label="发送" data-chat-send><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 8-16 8 3-8-3-8Z"/><path d="M7 12h13"/></svg></button>
+      </div>
+      <div class="fn-composer-note" data-chat-feedback>助手只读取你有权访问的客户空间内容作答</div>
+    </footer>
+    <div class="fn-toast" data-toast role="status"></div>
+  </main>
+  <script>
+  (function () {
+    'use strict';
+    /* ============ 基础工具 ============ */
+    const $ = (s, r) => (r || document).querySelector(s);
+    const pageEl = $('.fn-page');
+    const scrollEl = $('[data-scroll]');
+    const listEl = $('[data-list]');
+    const field = $('[data-chat-field]');
+    const sendBtn = $('[data-chat-send]');
+    const noteEl = $('[data-chat-feedback]');
+    const banner = $('[data-banner]');
+    const branchPill = $('[data-branch]');
+    /* 测试可用 window.FN_FAST 压缩延迟；流式按 8 字/ tick 加速 */
+    const speed = () => (window.FN_FAST ? 0.06 : 1);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+    const buzz = (ms) => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* 无触觉能力时静默 */ } };
+    const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    const fmtElapsed = (ms) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+    const scrollEnd = () => { scrollEl.scrollTop = scrollEl.scrollHeight; };
+    let toastTimer;
+    function toast(msg) {
+      const t = $('[data-toast]');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+    }
+    /* 底部弹层：来源摘录与消息操作共用 */
+    function openSheet(title, html) {
+      const mask = el('<div class="fn-sheet-mask"><section class="fn-sheet" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="fn-sheet-grab"></div><h3>' + esc(title) + '</h3>' + html + '</section></div>');
+      pageEl.append(mask);
+      const close = () => mask.remove();
+      mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+      return { node: mask, close };
+    }
+
+    /* ============ 演示数据：与桌面端同一份种子口径（星辰科技 WS-201 / 远山物流 WS-202 / 方案 SL-101） ============ */
+    const CITES = {
+      1: { title: '跟进记录 · 客户拜访', meta: '星辰科技 WS-201 · 2026-09-15 16:20 · 付赞', body: '下午拜访确认试点下周三启动，验收负责人待客户内部确认。下一步：等待客户明确验收负责人。' },
+      2: { title: '方案往来 · 通信线路试点建议', meta: 'SL-101 · 闫丽梅 2026-09-14 10:02 · 附件 通信线路试点建议.pdf（1.2 MB）', body: '建议采用两阶段试点：先验证线路稳定性与并发容量，再覆盖正式业务场景。请确认客户技术负责人及预计试点时间。' },
+      3: { title: '跟进记录 · 电话沟通', meta: '星辰科技 WS-201 · 2026-09-15 10:35 · 付赞', body: '上午与客户电话对齐验收指标口径，客户确认可用率口径。下一步：下午拜访确认试点启动时间。' },
+      4: { title: '方案往来 · 华东配送通知优化方案', meta: 'SL-102 · 闫丽梅 · 销售回复 2026-09-15 09:15', body: '客户认可方向，周四补充峰值数据。方案建议按通知类型拆分短信模板，先完成高峰量测算，再确定通道配置。' },
+      5: { title: 'CRM 客户档案 · 远山物流有限公司', meta: 'C-1002 · 行业 物流 · 阶段 需求确认 · 联系人 周先生', body: '华东配送通知需求明确，待补充高峰发送量。商机：通知短信升级（OP-302，16 万，需求确认）。' }
+    };
+    const SUGGESTIONS = [
+      { q: '星辰科技上次沟通到哪一步了？', sub: '简单问答 · 直接作答并附来源' },
+      { q: '帮我梳理远山物流这周的推进风险', sub: '多步工具 · 计划、产物与失败重试' },
+      { q: '把通信线路试点建议发给星辰科技的李女士', sub: '敏感操作 · 先确认再执行' }
+    ];
+    /*
+     * 剧本引擎的操作序列。do=think/understand/plan/step/confirm/artifact/answer/note/chips；
+     * needsAllow / needsDeny 让确认结果把剧本分成两条路径。
+     */
+    const SCRIPTS = {
+      r1: [
+        { do: 'think', ms: 650 },
+        { do: 'understand', text: '查询对象：星辰科技有限公司（WS-201）· 范围：跟进记录与方案往来 · 口径：只读你有权访问的空间内容' },
+        { do: 'answer', chunks: [
+          { t: '昨天下午（9 月 15 日 16:20）你拜访了星辰科技，确认试点下周三启动；验收负责人客户内部还在确认。' },
+          { cite: 1 },
+          { t: ' 上午的电话里，客户已经认可可用率口径。' },
+          { cite: 3 },
+          { t: '\n方案侧：闫丽梅 14 日推送了《通信线路试点建议》，昨天提醒过你查看。' },
+          { cite: 2 },
+          { t: '\n下一步建议：周四前再跟客户确认一次验收负责人，避免试点启动前卡住。' }
+        ] }
+      ],
+      r2: [
+        { do: 'think', ms: 750 },
+        { do: 'understand', text: '目标：输出远山物流（WS-202）本周推进风险清单 · 计划调用 4 项工具，预计约 8 秒' },
+        { do: 'plan', no: 'EX-0915-02', title: '梳理远山物流本周推进风险', stepsTotal: '共 5.5s', steps: [
+          { tool: 'crm.read_followups', sum: '读取本周跟进记录', args: 'space=WS-202 · window=本周' },
+          { tool: 'solution.list', sum: '读取方案往来与回复', args: 'space=WS-202 · with=reply' },
+          { tool: 'datahub.goal_progress', sum: '比对本周目标进度', args: 'owner=付赞 · metric=流水' },
+          { tool: 'risk.compose', sum: '汇总风险清单', args: 'template=周推进风险' }
+        ] },
+        { do: 'step', i: 0, ms: 1400, dur: '1.4s', preview: '命中 2 条：09-14 客户拜访「华东配送通知需求明确」；09-15 方案回复「客户认可方向，周四补峰值数据」。' },
+        { do: 'step', i: 1, ms: 900, dur: '0.9s', preview: 'SL-102 已读已回复；客户承诺周四（9 月 17 日）补充高峰发送量。' },
+        { do: 'step', i: 2, ms: 1200, fail: 'DataHub 取数超时（最近一次成功 09-15 06:30）', dur: '2.1s', preview: '本周流水口径下，远山物流暂无回款记录；目标达成不受影响，但需关注账期。' },
+        { do: 'step', i: 3, ms: 1100, dur: '1.1s', preview: '按「数据缺口 / 确认缺口 / 回款缺口」三类归并。' },
+        { do: 'artifact', title: '过程产物 · 风险清单（草稿）', items: ['高峰发送量数据未补齐，通道配置无法定稿', '验收标准只停留在口头，未书面确认', '本周无回款记录，账期需提前对齐'] },
+        { do: 'answer', chunks: [
+          { t: '远山物流这周的主要风险有三处：\n一、数据缺口：客户承诺周四补峰值数据，没到位前通道配置定不了稿。' },
+          { cite: 4 },
+          { t: '\n二、确认缺口：验收标准目前只有口头口径，建议本周内落成文字。\n三、回款缺口：本周流水口径下暂无远山物流回款，账期要提前对齐。' },
+          { cite: 5 },
+          { t: '\n建议：周四上午先催一次峰值数据，其余两项我可以在晚间日报里继续盯。' }
+        ] }
+      ],
+      r3: [
+        { do: 'think', ms: 650 },
+        { do: 'understand', text: '目标：把方案《通信线路试点建议》发给星辰科技联系人李女士 · 涉及对外触达，执行前需要你确认' },
+        { do: 'plan', no: 'EX-0915-03', title: '发送方案给星辰科技联系人', stepsTotal: '共 2.8s', steps: [
+          { tool: 'solution.get', sum: '读取方案与附件', args: 'id=SL-101' },
+          { tool: 'contact.resolve', sum: '核对联系人与渠道', args: 'space=WS-201 · name=李女士' },
+          { tool: 'message.send_external', sum: '对外发送方案', args: 'channel=邮件+站内 · attach=PDF' }
+        ] },
+        { do: 'step', i: 0, ms: 800, dur: '0.7s', preview: 'SL-101《通信线路试点建议》· 附件 通信线路试点建议.pdf（1.2 MB）· 状态 已推送未读。' },
+        { do: 'step', i: 1, ms: 850, dur: '0.8s', preview: '李女士 · 星辰科技 · 决策联系人 · 邮箱与站内均可用。' },
+        { do: 'confirm', title: '对外发送', rows: [['操作', '发送方案《通信线路试点建议》'], ['接收人', '星辰科技 · 李女士'], ['内容', '方案正文 + 附件 PDF（1.2 MB）'], ['影响', '对外触达，发送后不可撤回；将写入方案往来并提醒方案人员']], allow: '确认执行', deny: '取消' },
+        { do: 'step', i: 2, ms: 1300, dur: '1.3s', needsAllow: true, preview: '已通过邮件与站内发出；方案往来新增一条外发记录。' },
+        { do: 'artifact', title: '发送回执', needsAllow: true, items: ['送达时间 今天 16:42 · 邮件 + 站内', '已写入星辰科技空间 · 方案往来', '已提醒方案人员闫丽梅关注回复'] },
+        { do: 'answer', needsAllow: true, chunks: [
+          { t: '已确认并发出。《通信线路试点建议》连附件已送达李女士（邮件 + 站内），方案往来里留了外发记录，也提醒了闫丽梅留意回复。' },
+          { cite: 2 },
+          { t: '\n对方已读或回复时，你会收到提醒。' }
+        ] },
+        { do: 'note', needsDeny: true, text: '已取消 · 未执行发送' },
+        { do: 'answer', needsDeny: true, chunks: [
+          { t: '好的，没有发送。方案先留在方案往来里，你可以到星辰科技空间手动发，或者告诉我要调整的地方，我改好再请你确认。' }
+        ] }
+      ],
+      fb: [
+        { do: 'think', ms: 550 },
+        { do: 'answer', chunks: [
+          { t: '这个我手头没有可以核实的依据，不便编造。我只读取你有权访问的客户空间内容作答。你可以让我：\n一、查某家客户上次沟通到哪一步\n二、梳理某家客户本周的推进风险\n三、把方案发给客户联系人（发送前会给你确认）' }
+        ] },
+        { do: 'chips' }
+      ]
+    };
+    function matchScript(text) {
+      if (/星辰/.test(text) && /哪一步|进展|上次|沟通/.test(text)) return 'r1';
+      if (/远山/.test(text) && /风险|梳理|推进/.test(text)) return 'r2';
+      if (/发给|发送/.test(text) && /星辰|李女士|试点建议|方案/.test(text)) return 'r3';
+      return 'fb';
+    }
+
+    /* ============ 会话状态：分支 + 条目 ============ */
+    const branches = [{ name: '主线', items: [] }];
+    let current = 0;
+    let seq = 0;
+    let running = null;   /* { token, run } */
+    let editing = null;   /* 正在编辑重发的用户条目 */
+    const STOP = { stopped: true };
+    const items = () => branches[current].items;
+    const findItem = (id) => items().find((i) => i.id === id);
+
+    /* ============ 条目渲染 ============ */
+    function buildItem(item) {
+      let node;
+      if (item.role === 'user') {
+        node = el('<section class="fn-entry fn-user" data-id="' + item.id + '"><div class="fn-bubble">' + esc(item.text).replace(/\n/g, '<br>') + '</div><div class="fn-user-meta"><span>' + item.time + '</span><button class="fn-ctx" type="button" data-menu="' + item.id + '" aria-label="消息操作">···</button></div></section>');
+      } else if (item.kind === 'note') {
+        node = el('<section class="fn-entry" data-id="' + item.id + '"><div class="fn-time">' + item.time + '</div><div class="fn-main"><div class="fn-note">' + esc(item.text) + '</div></div></section>');
+      } else {
+        node = el('<section class="fn-entry" data-id="' + item.id + '"><div class="fn-time">' + item.time + '</div><div class="fn-main"><div class="fn-run-body">' + (item.html || '') + '</div><div class="fn-entry-tools"><button class="fn-ctx" type="button" data-menu="' + item.id + '" aria-label="消息操作">···</button></div></div></section>');
+      }
+      item.el = node;
+      return node;
+    }
+    function renderItem(item) { const n = buildItem(item); listEl.append(n); scrollEnd(); return n; }
+    function renderAll() { listEl.innerHTML = ''; items().forEach(renderItem); updateBranchPill(); }
+    function addUserItem(text) {
+      const item = { id: 'm' + (++seq), role: 'user', kind: 'text', text, time: nowTime() };
+      items().push(item); renderItem(item); return item;
+    }
+    function addRunItem(key, query) {
+      const item = { id: 'm' + (++seq), role: 'agent', kind: 'run', scriptKey: key, query, time: nowTime(), status: 'running', html: '', cites: {}, answerText: '' };
+      items().push(item); renderItem(item); return item;
+    }
+
+    /* ============ 执行计划卡 ============ */
+    function stepHtml(s, i) {
+      return '<div class="fn-step" data-step="' + i + '">' +
+        '<div class="fn-step-row" role="button" tabindex="0" aria-expanded="false"><span class="fn-stamp" data-stamp><i class="fn-wait"></i></span>' +
+        '<span><span class="fn-step-name">' + esc(s.tool) + '</span><div class="fn-step-sum">' + esc(s.sum) + '</div></span>' +
+        '<span class="fn-step-dur" data-dur></span></div>' +
+        '<div class="fn-step-detail"><b>参数摘要</b>' + esc(s.args) + '<b style="margin-top:6px">结果预览</b><span data-preview>待执行</span></div></div>';
+    }
+    function setStep(plan, i, status, opt) {
+      const row = plan.rows[i];
+      opt = opt || {};
+      if (status === 'run') { row.root.classList.remove('is-fail'); row.stamp.innerHTML = '<i class="fn-spin"></i>'; row.dur.textContent = ''; }
+      if (status === 'done') {
+        row.root.classList.remove('is-fail');
+        row.stamp.innerHTML = '<span class="fn-sealcheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>';
+        row.dur.textContent = opt.dur || '';
+        row.preview.textContent = opt.preview || '';
+      }
+      if (status === 'fail') {
+        row.root.classList.add('is-fail');
+        row.stamp.innerHTML = '<span class="fn-failmark">!</span>';
+        row.preview.textContent = opt.reason || '';
+        row.dur.textContent = '';
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'fn-retry'; btn.textContent = '重试'; btn.dataset.retry = '';
+        row.dur.appendChild(btn);
+      }
+    }
+    function updateBar(plan) { plan.bar.style.width = (plan.done / plan.total * 100) + '%'; }
+    function finishPlan(plan, failed) {
+      clearInterval(plan.timer);
+      plan.el.classList.remove('running');
+      plan.dot.className = 'fn-dot ' + (failed ? 'fn-dot-fail' : 'fn-dot-done');
+      plan.elapsedEl.textContent = plan.scriptedTotal || fmtElapsed(Date.now() - plan.startAt);
+    }
+
+    /* ============ 剧本算子 ============ */
+    function waitToken(token, ms) {
+      return new Promise((res) => {
+        const t = setTimeout(res, Math.max(16, ms * speed()));
+        token.waiters.push(() => { clearTimeout(t); res(); });
+      });
+    }
+    function throwIfStop(token) { if (token.cancelled) throw STOP; }
+    const OPS = {
+      /* 理解中：骨架屏 */
+      think: async (op, ctx, token) => {
+        const sk = el('<div class="fn-skel"><i></i><i></i><i></i></div>');
+        ctx.el.append(sk); scrollEnd();
+        await waitToken(token, op.ms);
+        sk.remove();
+      },
+      understand: async (op, ctx, token) => {
+        ctx.el.append(el('<div class="fn-understand"><div class="fn-label">理解目标</div>' + esc(op.text) + '</div>'));
+        scrollEnd(); await waitToken(token, 160);
+      },
+      plan: async (op, ctx, token) => {
+        const card = el('<div class="fn-plan running">' +
+          '<div class="fn-plan-head" role="button" tabindex="0" aria-expanded="false"><span class="fn-dot fn-dot-run" data-dot></span>' +
+          '<span><span class="fn-plan-title">' + esc(op.title) + '</span><span class="fn-plan-no">' + esc(op.no) + ' · ' + op.steps.length + ' 步 · 点击或上滑展开</span></span>' +
+          '<span class="fn-plan-elapsed" data-elapsed>0:00</span>' +
+          '<svg class="fn-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></div>' +
+          '<div class="fn-plan-bar"><i data-bar></i></div>' +
+          '<div class="fn-steps">' + op.steps.map(stepHtml).join('') + '</div></div>');
+        ctx.el.append(card);
+        const plan = ctx.plan = {
+          el: card, total: op.steps.length, done: 0, startAt: Date.now(), scriptedTotal: op.stepsTotal || '',
+          bar: card.querySelector('[data-bar]'), dot: card.querySelector('[data-dot]'), elapsedEl: card.querySelector('[data-elapsed]'),
+          rows: [...card.querySelectorAll('.fn-step')].map((root) => ({ root, stamp: root.querySelector('[data-stamp]'), dur: root.querySelector('[data-dur]'), preview: root.querySelector('[data-preview]') }))
+        };
+        plan.timer = setInterval(() => { plan.elapsedEl.textContent = fmtElapsed(Date.now() - plan.startAt); }, 200);
+        scrollEnd(); await waitToken(token, 200);
+      },
+      step: async (op, ctx, token) => {
+        const plan = ctx.plan;
+        const row = plan.rows[op.i];
+        setStep(plan, op.i, 'run'); scrollEnd();
+        await waitToken(token, op.ms); throwIfStop(token);
+        if (op.fail) {
+          /* 失败步骤挂起，等用户在步骤上点「重试」；停止生成同样会放行 */
+          setStep(plan, op.i, 'fail', { reason: op.fail }); scrollEnd();
+          await new Promise((res) => {
+            row.dur.querySelector('[data-retry]').addEventListener('click', async () => {
+              buzz(8);
+              setStep(plan, op.i, 'run');
+              await waitToken(token, 750);
+              setStep(plan, op.i, 'done', { dur: op.dur, preview: op.preview });
+              plan.done += 1; updateBar(plan);
+              if (plan.done === plan.total) finishPlan(plan);
+              scrollEnd(); res();
+            }, { once: true });
+            token.waiters.push(res);
+          });
+          throwIfStop(token);
+        } else {
+          setStep(plan, op.i, 'done', { dur: op.dur, preview: op.preview });
+          plan.done += 1; updateBar(plan);
+          if (plan.done === plan.total) finishPlan(plan);
+          scrollEnd();
+        }
+      },
+      /* 确认：挂起剧本，确认/取消决定后续走哪条路径 */
+      confirm: async (op, ctx, token) => {
+        const card = el('<div class="fn-sign"><h4>待你确认 · ' + esc(op.title) + '</h4>' +
+          '<dl>' + op.rows.map((r) => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl>' +
+          '<div class="fn-sign-actions"><button type="button" class="fn-allow" data-allow>' + esc(op.allow || '确认执行') + '</button>' +
+          '<button type="button" class="fn-deny" data-deny>' + esc(op.deny || '取消') + '</button></div></div>');
+        ctx.el.append(card); scrollEnd();
+        await new Promise((res) => {
+          const settle = (ok) => {
+            card.classList.add('stamped');
+            card.append(el('<span class="fn-stamp-big ' + (ok ? '' : 'deny') + '">' + (ok ? '已确认' : '已取消') + '</span>'));
+            buzz(ok ? 16 : 8);
+            setTimeout(res, Math.max(60, 420 * speed()));
+          };
+          card.querySelector('[data-allow]').addEventListener('click', () => { ctx.allowed = true; settle(true); }, { once: true });
+          card.querySelector('[data-deny]').addEventListener('click', () => { ctx.allowed = false; settle(false); }, { once: true });
+          token.waiters.push(res);
+        });
+        throwIfStop(token); scrollEnd();
+      },
+      artifact: async (op, ctx, token) => {
+        ctx.el.append(el('<div class="fn-receipt"><h4>' + esc(op.title) + '</h4><ul>' + op.items.map((i) => '<li>' + esc(i) + '</li>').join('') + '</ul></div>'));
+        scrollEnd(); await waitToken(token, 200);
+      },
+      note: async (op, ctx, token) => {
+        ctx.el.append(el('<div class="fn-note">' + esc(op.text) + '</div>'));
+        scrollEnd(); await waitToken(token, 120);
+      },
+      /* 最终答案：流式输出，〔n〕脚注随流出现 */
+      answer: async (op, ctx, token) => {
+        const block = el('<div class="fn-answer"></div>');
+        ctx.el.append(block); scrollEnd();
+        const caret = el('<span class="fn-caret"></span>');
+        block.append(caret);
+        let p = null;
+        const plain = [];
+        const ensureP = () => { if (!p) { p = document.createElement('p'); block.insertBefore(p, caret); } };
+        const stepChars = window.FN_FAST ? 8 : 1;
+        for (const chunk of op.chunks) {
+          throwIfStop(token);
+          if (chunk.cite) {
+            const n = chunk.cite;
+            ctx.cites[n] = CITES[n];
+            ensureP();
+            p.appendChild(el('<button type="button" class="fn-cite" data-cite="' + n + '">〔' + n + '〕</button>'));
+            plain.push('〔' + n + '〕');
+            continue;
+          }
+          for (let i = 0; i < chunk.t.length; i += stepChars) {
+            throwIfStop(token);
+            const seg = chunk.t.slice(i, i + stepChars);
+            for (const ch of seg) {
+              if (ch === '\n') { p = null; plain.push('\n'); }
+              else { ensureP(); p.appendChild(document.createTextNode(ch)); plain.push(ch); }
+            }
+            scrollEnd();
+            await waitToken(token, 22);
+          }
+        }
+        caret.remove();
+        ctx.run.answerText = (ctx.run.answerText || '') + plain.join('');
+      },
+      chips: async (op, ctx) => {
+        ctx.el.append(el('<div class="fn-chips" style="margin-top:10px">' + SUGGESTIONS.map((s) => '<button type="button" class="fn-chip" data-q="' + esc(s.q) + '"><span>' + esc(s.q) + '<small>' + esc(s.sub) + '</small></span></button>').join('') + '</div>'));
+        scrollEnd();
+      }
+    };
+
+    /* ============ 剧本执行：停止 / 重新生成 / 编辑重发共用一个执行器 ============ */
+    async function execute(script, run) {
+      const token = { cancelled: false, waiters: [] };
+      running = { token, run };
+      setComposerState('stop');
+      const body = run.el.querySelector('.fn-run-body');
+      const ctx = { el: body, run, cites: {}, allowed: false, plan: null };
+      try {
+        for (const op of script) {
+          throwIfStop(token);
+          if (op.needsAllow && !ctx.allowed) continue;
+          if (op.needsDeny && ctx.allowed) continue;
+          await OPS[op.do](op, ctx, token);
+        }
+        run.status = 'done';
+      } catch (e) {
+        if (e !== STOP) throw e;
+        run.status = 'stopped';
+        body.insertAdjacentHTML('beforeend', '<div class="fn-note">已停止生成 · 可从消息菜单重新生成</div>');
+      } finally {
+        if (ctx.plan && ctx.plan.el.classList.contains('running')) finishPlan(ctx.plan, true);
+        run.html = body.innerHTML;
+        run.cites = ctx.cites;
+        running = null;
+        setComposerState('send');
+        scrollEnd();
+      }
+    }
+    function stopGeneration() {
+      if (!running) return;
+      running.token.cancelled = true;
+      running.token.waiters.splice(0).forEach((r) => r());
+      buzz(12);
+    }
+    function respond(text) {
+      const key = matchScript(text);
+      execute(SCRIPTS[key], addRunItem(key, text));
+    }
+    function send(raw) {
+      if (running) { toast('正在执行，可先停止'); return; }
+      const text = String(raw == null ? field.value : raw).trim();
+      if (!text) return;
+      buzz(6);
+      if (editing) applyEdit(text); else addUserItem(text);
+      field.value = ''; autogrow();
+      respond(text);
+    }
+    function applyEdit(text) {
+      const arr = items();
+      const idx = arr.findIndex((i) => i.id === editing.id);
+      arr.splice(idx + 1).forEach((i) => { if (i.el) i.el.remove(); });
+      editing.text = text; editing.time = nowTime();
+      editing.el.replaceWith(buildItem(editing));
+      editing = null;
+      banner.hidden = true;
+    }
+
+    /* ============ 消息操作：复制 / 编辑重发 / 重新生成 / 分享 / 分支 ============ */
+    const ICONS = {
+      copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+      edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+      regen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
+      share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+      branch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M18 10.5c0 4-4 4.5-7.5 5"/></svg>'
+    };
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); }
+      catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.append(ta); ta.select();
+        try { document.execCommand('copy'); } catch (_) { /* jsdom 无此能力 */ }
+        ta.remove();
+      }
+      toast('已复制');
+    }
+    function startEdit(item) {
+      editing = item;
+      banner.hidden = false;
+      field.value = item.text;
+      autogrow(); field.focus();
+    }
+    function regenerate(item) {
+      const arr = items();
+      if (arr[arr.length - 1] !== item) { toast('仅支持重新生成最后一条回复'); return; }
+      const q = item.query;
+      arr.pop(); item.el.remove();
+      respond(q);
+    }
+    async function shareItem(item) {
+      const text = item.answerText || item.el.textContent;
+      if (navigator.share) { try { await navigator.share({ title: '销售助手 · 产物', text }); } catch (e) { /* 用户取消 */ } }
+      else copyText(text);
+    }
+    function branchFrom(item) {
+      const arr = items();
+      const idx = arr.findIndex((i) => i.id === item.id);
+      const copy = arr.slice(0, idx + 1).map((i) => Object.assign({}, i, { el: undefined }));
+      branches.push({ name: '分支 ' + branches.length, items: copy });
+      current = branches.length - 1;
+      renderAll();
+      toast('已创建' + branches[current].name + '，从「' + (item.text || item.query || '').slice(0, 12) + '」分叉');
+    }
+    function updateBranchPill() {
+      if (branches.length < 2) { branchPill.hidden = true; return; }
+      branchPill.hidden = false;
+      branchPill.textContent = branches[current].name + ' ' + (current + 1) + '/' + branches.length;
+    }
+    function openActions(item) {
+      if (!item) return;
+      if (running) { toast('生成中，可先停止再操作'); return; }
+      const acts = [{ k: 'copy', label: '复制' }];
+      if (item.role === 'user') acts.push({ k: 'edit', label: '编辑重发', hint: '替换后续回复' });
+      if (item.kind === 'run') acts.push({ k: 'regen', label: '重新生成' }, { k: 'share', label: '分享产物' });
+      acts.push({ k: 'branch', label: '分支对话', hint: '从此条分叉' });
+      const sheet = openSheet('消息操作', '<div class="fn-actions">' + acts.map((a) => '<button type="button" class="fn-action" data-act="' + a.k + '">' + ICONS[a.k] + '<span>' + a.label + '</span>' + (a.hint ? '<small>' + a.hint + '</small>' : '') + '</button>').join('') + '</div>');
+      sheet.node.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act]');
+        if (!b) return;
+        sheet.close();
+        const k = b.dataset.act;
+        if (k === 'copy') copyText(item.role === 'user' ? item.text : (item.answerText || item.el.textContent));
+        if (k === 'edit') startEdit(item);
+        if (k === 'regen') regenerate(item);
+        if (k === 'share') shareItem(item);
+        if (k === 'branch') branchFrom(item);
+      });
+    }
+
+    /* ============ 事件绑定：委托为主，快照重渲染后依然可用 ============ */
+    scrollEl.addEventListener('click', (e) => {
+      const cite = e.target.closest('[data-cite]');
+      if (cite) {
+        const entry = cite.closest('[data-id]');
+        const item = entry && findItem(entry.dataset.id);
+        const c = item && item.cites && item.cites[cite.dataset.cite];
+        if (c) openSheet(c.title, '<div class="fn-src-meta">' + esc(c.meta) + '</div><div class="fn-src-body">' + esc(c.body) + '</div>');
+        return;
+      }
+      const quick = e.target.closest('[data-q]');
+      if (quick) { send(quick.dataset.q); return; }
+      const menu = e.target.closest('[data-menu]');
+      if (menu) { openActions(findItem(menu.dataset.menu)); return; }
+      const stepRow = e.target.closest('.fn-step-row');
+      if (stepRow) {
+        const st = stepRow.closest('.fn-step');
+        st.classList.toggle('open');
+        stepRow.setAttribute('aria-expanded', st.classList.contains('open'));
+        return;
+      }
+      const head = e.target.closest('.fn-plan-head');
+      if (head) {
+        const p = head.closest('.fn-plan');
+        p.classList.toggle('open');
+        head.setAttribute('aria-expanded', p.classList.contains('open'));
+        buzz(4);
+      }
+    });
+    /* 键盘可达性：role=button 的计划头与步骤行支持 Enter/Space */
+    scrollEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const row = e.target.closest('.fn-step-row, .fn-plan-head');
+      if (row) { e.preventDefault(); row.click(); }
+    });
+    /* 计划卡上滑展开 */
+    let swipeY = null;
+    scrollEl.addEventListener('touchstart', (e) => {
+      const h = e.target.closest('.fn-plan-head');
+      swipeY = h ? e.touches[0].clientY : null;
+    }, { passive: true });
+    scrollEl.addEventListener('touchend', (e) => {
+      if (swipeY == null) return;
+      const dy = e.changedTouches[0].clientY - swipeY;
+      swipeY = null;
+      if (dy < -24) {
+        const h = e.target.closest('.fn-plan-head');
+        const p = h && h.closest('.fn-plan');
+        if (p && !p.classList.contains('open')) { p.classList.add('open'); buzz(6); }
+      }
+    }, { passive: true });
+    /* 长按消息菜单（触屏 550ms；桌面右键同样可用） */
+    let lpTimer = null;
+    scrollEl.addEventListener('touchstart', (e) => {
+      const entry = e.target.closest('.fn-entry');
+      if (!entry) return;
+      const id = entry.dataset.id;
+      lpTimer = setTimeout(() => { buzz(10); openActions(findItem(id)); lpTimer = null; }, 550);
+    }, { passive: true });
+    ['touchmove', 'touchend', 'touchcancel'].forEach((ev) => scrollEl.addEventListener(ev, () => { clearTimeout(lpTimer); lpTimer = null; }, { passive: true }));
+    scrollEl.addEventListener('contextmenu', (e) => {
+      const entry = e.target.closest('.fn-entry');
+      if (entry) { e.preventDefault(); openActions(findItem(entry.dataset.id)); }
+    });
+
+    /* ============ 输入区 ============ */
+    const ICON_SEND = sendBtn.innerHTML;
+    const ICON_STOP = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>';
+    function setComposerState(s) {
+      sendBtn.dataset.state = s;
+      sendBtn.innerHTML = s === 'stop' ? ICON_STOP : ICON_SEND;
+      sendBtn.setAttribute('aria-label', s === 'stop' ? '停止生成' : '发送');
+      noteEl.textContent = s === 'stop' ? '正在执行… 点击右侧按钮可停止' : '助手只读取你有权访问的客户空间内容作答';
+    }
+    function autogrow() {
+      field.style.height = 'auto';
+      field.style.height = Math.min(field.scrollHeight, 120) + 'px';
+    }
+    sendBtn.addEventListener('click', () => {
+      if (sendBtn.dataset.state === 'stop') stopGeneration();
+      else send();
+    });
+    field.addEventListener('input', autogrow);
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+    });
+    field.addEventListener('focus', () => setTimeout(scrollEnd, 320));
+    /* 键盘弹起（visualViewport 收缩）时保持最新消息可见 */
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => { if (document.activeElement === field) scrollEnd(); });
+    }
+    $('[data-banner-cancel]').addEventListener('click', () => {
+      editing = null; banner.hidden = true; field.value = ''; autogrow();
+    });
+
+    /* ============ 分支切换 ============ */
+    branchPill.addEventListener('click', () => {
+      if (branches.length < 2) return;
+      current = (current + 1) % branches.length;
+      renderAll();
+      toast('已切换到' + branches[current].name);
+    });
+
+    /* ============ 与外壳的契约：返回协议 + 同源日期 ============ */
+    $('[data-chat-back]').addEventListener('click', () => {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'sales-chat-close' }, '*');
+        return;
+      }
+      window.location.href = 'mobile-ios.html';
+    });
+    (function initContext() {
+      let today = '2026-09-15';
+      try {
+        const p = window.parent;
+        if (p && p !== window && p.SC && p.SC.FEATURES && p.SC.FEATURES.today) today = p.SC.FEATURES.today;
+      } catch (e) { /* 独立打开 */ }
+      const parts = today.split('-').map(Number);
+      $('[data-eyebrow]').textContent = parts[0] + ' 年 ' + parts[1] + ' 月 ' + parts[2] + ' 日 · 本人助手';
+    })();
+  })();
+  </script>
+</body>
+</html>

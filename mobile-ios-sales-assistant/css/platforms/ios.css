@@ -1,0 +1,110 @@
+/* iOS 列表优先：隐藏滚动条、固定状态栏、跟进/收件箱改成无卡片列表。 */
+html:has(body.platform-ios),
+body.platform-ios,
+.platform-ios .mobile-content { scrollbar-width: none; -ms-overflow-style: none; }
+html:has(body.platform-ios)::-webkit-scrollbar,
+body.platform-ios::-webkit-scrollbar,
+.platform-ios .mobile-content::-webkit-scrollbar { display: none; width: 0; height: 0; }
+body.platform-ios { min-height: 100vh; overflow: hidden; background: var(--surface); }
+/* 给固定状态栏留空；聊天页自身带状态栏，不再加这段 padding。 */
+body.platform-ios:not(.ios-chat-document) { padding-top: 44px; }
+.platform-ios .ios-system-status { position: fixed; top: 0; left: 50%; z-index: 60; width: min(100%, 430px); height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 7px 20px 0; transform: translateX(-50%); color: var(--fg); background: var(--surface); font-family: var(--font-body); font-size: 12px; font-weight: 700; }
+.platform-ios .ios-system-status::after { content: ""; position: absolute; top: 9px; left: 50%; width: 110px; height: 25px; transform: translateX(-50%); border-radius: 20px; background: var(--fg); }
+.platform-ios .mobile-frame { width: min(100%, 430px); height: calc(100dvh - 44px); min-height: 0; margin-inline: auto; overflow: hidden; background: var(--surface); }
+.platform-ios .assistant-page { right: auto; left: 50%; max-width: 430px; transform: translateX(-50%); }
+.platform-ios .ios-chat-screen { width: min(100%, 430px); margin-inline: auto; }
+.platform-ios .mobile-bottom-nav { width: min(100%, 430px); left: 50%; right: auto; transform: translateX(-50%); }
+.platform-ios .mobile-status { position: relative; z-index: 2; border: 0; }
+.platform-ios .mobile-topbar { min-height: 76px; padding: 8px 16px 10px; border-bottom: 0; }
+.platform-ios .mobile-greeting h1 { font-size: 24px; letter-spacing: -.04em; }
+.platform-ios .mobile-greeting p { margin-top: 2px; color: var(--muted); font-size: 12px; }
+.platform-ios .mobile-top-actions { margin-top: 2px; }
+.platform-ios .ios-assistant-button { position: relative; isolation: isolate; overflow: hidden; width: 44px; height: 44px; border: 1px solid color-mix(in oklab, var(--accent), var(--border) 62%); border-radius: 50%; color: var(--accent); background: var(--surface); box-shadow: 0 3px 10px color-mix(in oklab, var(--accent), transparent 88%), inset 0 0 0 1px color-mix(in oklab, var(--accent), transparent 92%); }
+.platform-ios .ios-assistant-button::before { content: ""; position: absolute; inset: -42%; z-index: -1; background: linear-gradient(115deg, transparent 38%, color-mix(in oklab, var(--accent), white 55%) 48%, transparent 58%); transform: translateX(-68%) rotate(14deg); animation: ios-button-gloss 5.6s var(--ease-standard) 1.8s infinite; }
+.platform-ios .ios-assistant-button::after { content: ""; position: absolute; inset: 4px; border: 1px solid color-mix(in oklab, var(--accent), transparent 78%); border-radius: 50%; pointer-events: none; }
+.platform-ios .ios-assistant-button svg { position: relative; width: 18px; height: 18px; stroke-width: 1.7; }
+@keyframes ios-button-gloss { 0%, 42% { transform: translateX(-68%) rotate(14deg); opacity: 0; } 54% { opacity: .9; } 72%, 100% { transform: translateX(68%) rotate(14deg); opacity: 0; } }
+.platform-ios .ios-assistant-button:active { transform: scale(.94); box-shadow: 0 1px 4px color-mix(in oklab, var(--accent), transparent 82%); }
+.platform-ios .mobile-content { min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 2px 16px 84px; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.platform-ios .ios-welcome { display: flex; align-items: center; gap: 12px; min-height: 124px; padding: 18px 2px 22px; }
+.platform-ios .ios-welcome-mark { width: 42px; height: 48px; flex: 0 0 auto; color: var(--fg); }
+.platform-ios .ios-welcome-mark svg { width: 42px; height: 48px; }
+.platform-ios .ios-doll-eye { transform-box: fill-box; transform-origin: center; animation: ios-doll-blink 5.8s var(--ease-standard) 1.2s infinite; }
+.platform-ios.is-playing-welcome .ios-doll-eye,
+.platform-ios.is-welcome-offscreen .ios-doll-eye,
+.platform-ios.is-welcome-offscreen .ios-chat-launch::before { animation-play-state: paused; }
+.platform-ios .ios-doll-eye:nth-of-type(2) { animation-delay: 1.28s; }
+@keyframes ios-doll-blink { 0%, 91%, 96%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.12); } }
+.platform-ios .ios-welcome-copy { min-width: 0; flex: 1; }
+.platform-ios .ios-welcome-copy [data-typewriter-line] { min-height: 1.4em; }
+/* 打字时光标；欢迎区滚出视口后由 JS 加 is-welcome-offscreen 暂停眨眼/扫光。 */
+.platform-ios .ios-welcome-copy [data-typewriter-line].is-typing::after { content: ""; display: inline-block; width: 1px; height: 1em; margin-left: 2px; vertical-align: -.12em; background: currentColor; animation: ios-typewriter-caret 720ms steps(1) infinite; }
+@keyframes ios-typewriter-caret { 50% { opacity: 0; } }
+.platform-ios .ios-welcome-copy p { color: var(--fg); font-size: 15px; line-height: 1.35; }
+.platform-ios .ios-welcome-copy h2 { margin-top: 3px; color: var(--fg); font-size: 15px; font-weight: 500; line-height: 1.4; letter-spacing: -.02em; }
+.platform-ios .ios-chat-launch { position: relative; isolation: isolate; overflow: hidden; width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid color-mix(in oklab, var(--accent), var(--border) 62%); border-radius: 50%; color: var(--accent); background: var(--surface); box-shadow: 0 3px 10px color-mix(in oklab, var(--accent), transparent 88%), inset 0 0 0 1px color-mix(in oklab, var(--accent), transparent 92%); }
+.platform-ios .ios-chat-launch::before { content: ""; position: absolute; inset: -42%; z-index: -1; background: linear-gradient(115deg, transparent 38%, color-mix(in oklab, var(--accent), white 55%) 48%, transparent 58%); transform: translateX(-68%) rotate(14deg); animation: ios-button-gloss 5.6s var(--ease-standard) 1.8s infinite; }
+.platform-ios .ios-chat-launch::after { content: ""; position: absolute; inset: 4px; border: 1px solid color-mix(in oklab, var(--accent), transparent 78%); border-radius: 50%; pointer-events: none; }
+.platform-ios .ios-chat-launch svg { position: relative; width: 18px; height: 18px; stroke-width: 1.7; }
+.platform-ios .ios-chat-launch:active { transform: scale(.94); }
+.platform-ios .ios-performance { margin: 0 -16px 28px; }
+.platform-ios .ios-performance-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 16px 10px; }
+.platform-ios .ios-performance-head h2 { font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+.platform-ios .ios-performance-head span { color: var(--muted); font-size: 10px; }
+.platform-ios .ios-performance-track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(208px, 72vw); gap: 10px; overflow-x: auto; padding: 0 16px 8px; scroll-padding-inline: 16px; scroll-snap-type: x mandatory; overscroll-behavior-inline: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.platform-ios .ios-performance-track::-webkit-scrollbar { display: none; }
+.platform-ios .ios-performance-track:focus-visible { outline: none; }
+.platform-ios .ios-performance-card { min-height: 116px; display: flex; flex-direction: column; padding: 16px; scroll-snap-align: start; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--elev-flat); }
+.platform-ios .ios-performance-card p { color: var(--muted); font-size: 12px; }
+.platform-ios .ios-performance-card strong { margin-top: 10px; font-family: var(--font-mono); font-size: 26px; font-weight: 600; line-height: 1; letter-spacing: -.03em; }
+.platform-ios .ios-performance-card strong.is-text { font-family: var(--font-body); font-size: 20px; }
+.platform-ios .ios-performance-card span { margin-top: auto; color: var(--muted); font-size: 11px; }
+.platform-ios .mobile-section { margin-bottom: 22px; }
+.platform-ios .mobile-section .section-head { min-height: 31px; margin-bottom: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.platform-ios .mobile-section .section-head h2 { font-size: 16px; font-weight: 650; }
+.platform-ios .mobile-section .section-head .section-count { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.platform-ios .mobile-follow-list { gap: 0; }
+.platform-ios .mobile-follow-list .follow-card { min-height: 0; padding: 15px 30px 15px 14px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }
+.platform-ios .mobile-follow-list .follow-card:first-child { border-top: 0; }
+.platform-ios .mobile-follow-list .follow-card:hover,
+.platform-ios .mobile-follow-list .follow-card.is-expanded { border-color: var(--border); transform: none; box-shadow: none; }
+.platform-ios .mobile-follow-list .card-person { margin-bottom: 4px; }
+.platform-ios .mobile-follow-list .person-avatar,
+.platform-ios .mobile-follow-list .person-company { display: none; }
+.platform-ios .mobile-follow-list .person-name { font-size: 14px; font-weight: 650; }
+.platform-ios .mobile-follow-list .reason { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.platform-ios .mobile-follow-list .next-step { margin-top: 4px; font-size: 12px; font-weight: 500; }
+.platform-ios .mobile-follow-list .next-step svg { display: none; }
+.platform-ios .mobile-follow-list .expand-caret { display: none; }
+.platform-ios .mobile-follow-list .card-link { top: 17px; right: 8px; bottom: auto; color: var(--muted); font-size: 0; font-weight: 400; }
+.platform-ios .mobile-follow-list .card-link span.ios-chevron { display: inline-grid; place-items: center; width: 20px; height: 24px; font-size: 0; line-height: 1; }
+.platform-ios .mobile-follow-list .card-link span.ios-chevron svg { width: 9px; height: 16px; stroke-width: 1.7; }
+.platform-ios .mobile-follow-list .follow-detail { margin-top: 10px; }
+.platform-ios .mobile-follow-list .follow-detail-inner { padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; }
+.platform-ios .mobile-follow-list .fact { padding: 0; border-radius: 0; background: transparent; font-size: 10px; }
+.platform-ios .mobile-follow-list .fact + .fact::before { content: " · "; color: var(--muted); }
+.platform-ios .mobile-inbox { margin-top: 24px; padding: 17px 0 14px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; }
+.platform-ios .mobile-inbox .inbox-header { padding-bottom: 10px; border-bottom: 0; }
+.platform-ios .mobile-inbox .inbox-title { margin-bottom: 12px; }
+.platform-ios .mobile-inbox .inbox-title h2 { font-size: 16px; }
+.platform-ios .mobile-inbox .segmented { display: flex; width: 100%; gap: 16px; padding: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+.platform-ios .mobile-inbox .segmented button { min-width: 0; height: 34px; flex: 0 0 auto; padding: 0 2px; border-radius: 0; color: var(--muted); background: transparent; box-shadow: none; font-size: 12px; }
+.platform-ios .mobile-inbox .segmented button.is-active { color: var(--fg); background: transparent; box-shadow: inset 0 -2px 0 var(--accent); font-weight: 650; }
+.platform-ios .mobile-inbox .inbox-item { border-bottom: 1px solid var(--border); }
+.platform-ios .mobile-inbox .space-link { min-height: 27px; padding: 10px 0 0; font-size: 11px; }
+.platform-ios .mobile-inbox .inbox-row { min-height: 62px; gap: 0; padding: 13px 0; }
+.platform-ios .mobile-inbox .inbox-type { display: none; }
+.platform-ios .mobile-inbox .inbox-main { padding-right: 8px; }
+.platform-ios .mobile-inbox .inbox-title-line strong { font-size: 13px; font-weight: 600; }
+.platform-ios .mobile-inbox .inbox-meta { margin-top: 3px; font-size: 10px; }
+.platform-ios .mobile-inbox .inbox-time { font-size: 10px; }
+.platform-ios .mobile-inbox .inbox-chevron { width: 16px; height: 16px; }
+.platform-ios .mobile-inbox .inbox-detail-content { margin: 0 0 14px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; }
+.platform-ios .mobile-inbox .detail-header { margin-bottom: 8px; }
+.platform-ios .mobile-inbox .detail-tag { height: auto; padding: 0; border-radius: 0; background: transparent; font-size: 11px; }
+.platform-ios .mobile-inbox .detail-copy { font-size: 12px; line-height: 1.65; }
+.platform-ios .mobile-inbox .detail-actions { gap: 8px; margin-top: 12px; }
+.platform-ios .mobile-inbox .btn { min-height: 34px; padding: 0 12px; }
+.platform-ios .mobile-bottom-nav { height: 70px; padding: 4px 16px calc(5px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); }
+.platform-ios .bottom-nav-item { min-height: 44px; gap: 1px; border-radius: 0; font-size: 9px; }
+.platform-ios .bottom-nav-item svg { width: 17px; height: 17px; }

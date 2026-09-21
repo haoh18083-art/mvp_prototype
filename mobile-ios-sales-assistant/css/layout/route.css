@@ -1,0 +1,14 @@
+/* 根目录入口：三端体验选择卡。 */
+.route-page { min-height: 100vh; padding: 60px 24px; background: var(--shell-bg); }
+.route-wrap { width: min(100%, 960px); margin: 0 auto; }
+.route-kicker { color: var(--accent); font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; }
+.route-page h1 { max-width: 650px; margin-top: 14px; font-size: clamp(32px, 5vw, 58px); }
+.route-page > .route-wrap > p { max-width: 620px; margin-top: 16px; color: var(--muted); font-size: 15px; }
+.route-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 42px; }
+.route-card { display: flex; flex-direction: column; min-height: 210px; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); transition: transform var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard); }
+.route-card:hover { border-color: color-mix(in oklab, var(--accent), var(--border) 55%); transform: translateY(-3px); box-shadow: var(--elev-raised); }
+.route-number { color: var(--accent); font-family: var(--font-mono); font-size: 12px; }
+.route-card h2 { margin-top: 28px; font-size: 19px; }
+.route-card p { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.route-card .route-link { display: inline-flex; align-items: center; gap: 5px; margin-top: auto; padding-top: 20px; color: var(--accent); font-size: 12px; font-weight: 650; }
+.route-foot { margin-top: 32px; color: var(--muted); font-size: 12px; }

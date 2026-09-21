@@ -1,0 +1,4 @@
+/* 轻提示：默认下移隐藏，.is-visible 时浮上来。 */
+.toast { position: fixed; left: 50%; bottom: 32px; z-index: 40; display: flex; align-items: center; gap: 9px; padding: 12px 15px; border: 1px solid var(--border); border-radius: 10px; color: var(--fg); background: var(--surface); box-shadow: var(--elev-raised); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; transition: opacity var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard); font-size: 12px; }
+.toast.is-visible { transform: translate(-50%, 0); opacity: 1; }
+.toast svg { width: 16px; height: 16px; color: var(--success); }

@@ -1,0 +1,10 @@
+/* 基础重置：统一盒模型、表单字体和焦点环。 */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { min-width: 320px; background: var(--shell-bg); }
+body { margin: 0; color: var(--fg); background: var(--shell-bg); font-family: "Microsoft YaHei", "PingFang SC", -apple-system, system-ui, sans-serif; font-size: var(--text-base); line-height: var(--leading-body); -webkit-font-smoothing: antialiased; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+a { color: inherit; text-decoration: none; }
+svg { display: block; }

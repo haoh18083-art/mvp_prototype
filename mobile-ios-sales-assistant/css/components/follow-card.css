@@ -1,0 +1,31 @@
+/* 「今天该跟」卡片：默认两列；展开靠 grid-template-rows 做高度动画。 */
+.follow-section { margin-bottom: 38px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.section-head-left { display: flex; align-items: baseline; gap: 10px; }
+.section-count { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.section-note { color: var(--muted); font-size: 12px; }
+.follow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.follow-card { position: relative; min-height: 128px; padding: 18px 48px 16px 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); transition: border-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard); }
+.follow-card:hover { border-color: color-mix(in oklab, var(--accent), var(--border) 55%); transform: translateY(-1px); box-shadow: var(--elev-raised); }
+.follow-card.is-expanded { border-color: color-mix(in oklab, var(--accent), var(--border) 45%); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent), transparent 90%); }
+.follow-card.is-expanded .expand-caret { transform: rotate(180deg); color: var(--accent); }
+.card-person { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.person-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--navy); background: var(--soft-blue); font-size: 13px; font-weight: 700; }
+.person-avatar.green { color: color-mix(in oklab, var(--success), var(--fg) 24%); background: var(--soft-green); }
+.person-avatar.yellow { color: color-mix(in oklab, var(--warn), var(--fg) 48%); background: var(--soft-yellow); }
+.person-avatar.red { color: color-mix(in oklab, var(--danger), var(--fg) 26%); background: var(--soft-red); }
+.person-name { font-size: 15px; font-weight: 650; }
+.person-company { margin-top: 1px; color: var(--muted); font-size: 12px; }
+.reason { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.next-step { display: flex; align-items: flex-start; gap: 6px; margin-top: 9px; color: var(--fg); font-size: 12px; font-weight: 600; }
+.next-step svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 1px; color: var(--accent); }
+.expand-caret { position: absolute; top: 20px; right: 16px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--muted); background: transparent; transition: transform var(--motion-base) var(--ease-standard), color var(--motion-base) var(--ease-standard), background var(--motion-fast) var(--ease-standard); }
+.expand-caret:hover { background: var(--soft-blue); }
+/* 0fr → 1fr 才能在不写死高度时平滑展开。 */
+.follow-detail { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 260ms var(--ease-standard), opacity 180ms var(--ease-standard), padding-top 260ms var(--ease-standard); }
+.follow-detail > div { overflow: hidden; }
+.follow-card.is-expanded .follow-detail { grid-template-rows: 1fr; padding-top: 14px; opacity: 1; }
+.follow-detail-inner { padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.detail-facts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.fact { padding: 4px 8px; border-radius: 5px; color: var(--muted); background: var(--bg); font-size: 11px; }
+.card-link { position: absolute; right: 16px; bottom: 16px; display: inline-flex; align-items: center; gap: 3px; color: var(--accent); font-size: 11px; font-weight: 650; }

@@ -1,0 +1,28 @@
+/* iOS 基础尺寸：状态栏、安全区、圆形返回按钮。更细的列表样式在 ios.css。 */
+.platform-ios .mobile-status { height: 44px; align-items: center; padding: 7px 20px 0; font-family: var(--font-body); font-size: 12px; font-weight: 700; }
+.platform-ios .mobile-status::after { content: ""; position: absolute; top: 9px; left: 50%; width: 110px; height: 25px; transform: translateX(-50%); border-radius: 20px; background: var(--fg); }
+.platform-ios .mobile-topbar { min-height: 78px; padding: 17px 20px 13px; }
+.platform-ios .mobile-content { padding-top: 22px; }
+.platform-ios .mobile-inbox { border-radius: 16px; }
+.platform-ios .mobile-bottom-nav { height: 84px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+.platform-ios .mobile-fab { border-radius: 50%; }
+.platform-ios .assistant-header { position: relative; height: 88px; flex: 0 0 auto; padding: 42px 18px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.platform-ios .assistant-header::after { content: ""; position: absolute; top: 9px; left: 50%; width: 104px; height: 25px; transform: translateX(-50%); border-radius: 20px; background: var(--fg); }
+.platform-ios .assistant-header .back-button { width: 44px; height: 44px; border-radius: 50%; }
+.platform-ios .assistant-heading strong { font-size: 15px; }
+.platform-ios .assistant-heading span { font-size: 11px; }
+.platform-ios .assistant-body { width: 100%; max-width: none; padding: 24px 20px calc(22px + env(safe-area-inset-bottom)); }
+.platform-ios .assistant-welcome { padding-top: 8vh; }
+.platform-ios .assistant-welcome h1 { font-size: 30px; letter-spacing: -.04em; }
+.platform-ios .assistant-welcome p { font-size: 13px; }
+.platform-ios .chat-input { min-height: 54px; border-radius: 18px; padding-left: 16px; }
+.platform-ios .send-button { width: 40px; height: 40px; border-radius: 50%; }
+.platform-ios .chat-note { padding-bottom: env(safe-area-inset-bottom); }
+@media (prefers-reduced-motion: reduce) {
+  .platform-ios .ios-doll-eye,
+  .platform-ios .ios-chat-launch::before,
+  .platform-ios .ios-welcome-copy [data-typewriter-line].is-typing::after { animation: none; }
+  .platform-ios .mobile-frame,
+  .platform-ios .assistant-page.is-visible,
+  .platform-ios .assistant-page.is-closing { transition-duration: 1ms; animation-duration: 1ms; }
+}
