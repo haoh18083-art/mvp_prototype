@@ -1,0 +1,57 @@
+/* V0.2 表格容器响应：按面板实际宽度切换信息行，避免侧栏和分栏挤压数据。 */
+@container fp-data-table (max-width: 720px) {
+  .fp-data-table-wrap { overflow: visible; }
+  .fp-data-table, .fp-data-table tbody { display: block; width: 100%; min-width: 0; white-space: normal; }
+  .fp-data-table thead { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .fp-data-table thead tr { display: block; width: 1px; height: 1px; overflow: hidden; }
+  .fp-data-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px 16px; border-bottom: 1px solid var(--gray-100); }
+  .fp-data-table--single tbody tr { grid-template-columns: minmax(0, 1fr); }
+  .fp-data-table tbody tr:last-child { border-bottom: 0; }
+  .fp-data-table td, .fp-data-table--wide td:first-child, .fp-data-table--wide td:last-child { position: static; display: block; width: auto; min-width: 0; max-width: none; padding: 0; border: 0; box-shadow: none; background: transparent; text-align: left; white-space: normal; }
+  .fp-data-table td.is-primary, .fp-data-table td.is-date, .fp-data-table td.is-status, .fp-data-table td.is-number, .fp-data-table td.is-action, .fp-data-table td.is-long { width: auto; min-width: 0; max-width: none; white-space: normal; }
+  .fp-data-table .fp-table-cell-label { display: block; margin-bottom: 4px; color: var(--text-3); font-size: 10px; font-weight: 600; line-height: 1.4; }
+  .fp-data-table td.is-primary, .fp-data-table td.is-long, .fp-data-table td.is-action { grid-column: 1 / -1; }
+  .fp-data-table td.is-primary { padding-bottom: 2px; }
+  .fp-data-table td.is-primary > a, .fp-data-table td.is-action > a, .fp-data-table td.is-action > .btn { min-height: 44px; }
+  .fp-data-table td.is-primary > a { display: inline-flex; align-items: center; }
+  .fp-data-table td.is-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }
+  .fp-data-table td.is-action .fp-table-cell-label { margin: 0; }
+  .fp-data-table tr.is-empty { display: block; padding: 0; }
+  .fp-data-table tr.is-empty td { display: block; }
+  .fp-data-table tr.is-empty .fp-table-cell-label { display: none; }
+  .fp-table-footer { padding-inline: 16px; }
+}
+
+@container fp-directory (max-width: 720px) {
+  .fp-directory-head { align-items: flex-start; flex-wrap: wrap; }
+  .fp-directory-filter { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .fp-directory-search, .fp-directory-select, .fp-directory-actions { grid-column: 1; width: 100%; }
+  .fp-directory-search, .fp-directory-select select, .fp-directory-reset { height: 44px; }
+  .fp-directory-clear { width: 44px; height: 44px; margin-right: -8px; }
+  .fp-directory-reset { width: 100%; }
+  .fp-directory-feedback { align-items: flex-start; flex-direction: column; padding-inline: 12px; }
+  .fp-directory-chips { width: 100%; }
+  .fp-filter-chip { min-height: 44px; height: auto; padding-inline: 10px; }
+  .fp-directory-table-wrap { overflow: visible; }
+  .fp-directory-table, .fp-directory-table tbody { display: block; width: 100%; min-width: 0; white-space: normal; }
+  .fp-directory-table colgroup { display: none; }
+  .fp-directory-table thead { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .fp-directory-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 16px; padding: 14px 12px; border-bottom: 1px solid var(--gray-100); }
+  .fp-directory-table tbody tr:last-child { border-bottom: 0; }
+  .fp-directory-table tbody tr:hover { background: var(--brand-50); }
+  .fp-directory-table td { position: static; display: block; min-width: 0; padding: 0; border: 0; box-shadow: none; background: transparent; text-align: left; }
+  .fp-directory-mobile-label { display: block; margin-bottom: 4px; color: var(--text-3); font-size: 10px; font-weight: 600; }
+  .fp-directory-customer { grid-column: 1; grid-row: 1; align-self: center; }
+  .fp-directory-customer .fp-directory-mobile-label, .fp-directory-operation .fp-directory-mobile-label { display: none; }
+  .fp-directory-customer a { display: flex; align-items: center; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+  .fp-directory-operation { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
+  .fp-directory-state { grid-column: 1 / -1; }
+  .fp-directory-table tr.is-empty { display: block; padding: 0; }
+  .fp-row-action { min-height: 44px; }
+}
+
+@container fp-directory (min-width: 721px) and (max-width: 1100px) {
+  .fp-directory-filter { grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) minmax(130px, 160px); }
+  .fp-directory-search { grid-column: 1 / -1; }
+  .fp-directory-actions { justify-content: flex-end; }
+}

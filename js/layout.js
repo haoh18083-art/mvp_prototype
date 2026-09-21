@@ -1,5 +1,5 @@
 /* ==========================================================================
-   主框架挂载 · P-CMN-02 系统主框架
+   V0.2 功能页主框架
    每个页面 HTML 只声明自己的 <div id="sc-app">，框架由本文件统一注入，
    保证左侧菜单区、顶部信息区在所有页面完全一致。
    ========================================================================== */
@@ -38,14 +38,6 @@ window.SC = window.SC || {};
     return compactNavigation();
   }
 
-  function navGroupKey(key) { return 'sc-nav-group-' + key; }
-
-  function navGroupExpanded(key) {
-    var saved = navigationSetting(navGroupKey(key));
-    // The same menu tree stays visible on every page; only an explicit toggle changes it.
-    return saved === null || saved === 'true';
-  }
-
   /* ---------------------------------------------- 左侧菜单区 */
 
   function navHTML(role, activeKey) {
@@ -53,51 +45,29 @@ window.SC = window.SC || {};
     var collapsed = navigationCollapsed();
     var toggleLabel = collapsed ? '展开导航' : '收起导航';
 
-    function itemInner(m, noPendingBadge) {
-      // 父目录没有 href 是设计如此（纯收起/展开，不是“尚未交付”），不当作待交付页面标注批次角标。
-      var pending = !noPendingBadge && !m.href;
-      var badge = pending ? '<span class="sc-nav__batch">批' + m.batch + '</span>'
-                          : (m.empty ? '<span class="sc-nav__batch">空</span>' : '');
+    function itemInner(m) {
       return '<span class="sc-nav__ico">' + SC.icon(m.icon, 16) + '</span>' +
-             '<span class="sc-nav__label">' + m.label + '</span>' + badge;
+             '<span class="sc-nav__label">' + SC.esc(m.label) + '</span>';
     }
 
-    function itemHTML(m, extraCls) {
+    function itemHTML(m) {
       var isActive = m.key === activeKey;
-      var pending = !m.href;                      // 本原型批次尚未交付的页面
-      var cls = 'sc-nav__item' + (extraCls ? ' ' + extraCls : '') + (isActive ? ' is-active' : '') + (pending ? ' is-pending' : '');
-      var tag = pending ? 'div' : 'a';
-      var href = pending ? '' : ' href="' + m.href + '"';
-      var title = pending
-        ? ' title="' + m.label + '（原型批' + m.batch + ' 交付 · 需求来源 ' + m.src + '）"'
-        : ' title="' + m.label + '（需求来源 ' + m.src + '）"';
-      return '<' + tag + ' class="' + cls + '"' + href + title + ' data-menu="' + m.key + '" data-od-id="nav-' + m.key + '"' + (isActive ? ' aria-current="page"' : '') + (pending ? ' aria-disabled="true"' : '') + '>' +
+      // 封存条目保留在菜单里说明版本规划，但不作为链接渲染；直接输入路径仍可访问对应页面。
+      if (m.disabled) {
+        var reason = m.disabledReason || '本版未开放';
+        return '<span class="sc-nav__item is-disabled" aria-disabled="true" title="' + SC.esc(m.label + ' · ' + reason) +
+               '" data-menu="' + SC.esc(m.key) + '" data-menu-disabled="true" data-od-id="nav-' + SC.esc(m.key) + '">' +
+               itemInner(m) +
+               '<span class="sc-nav__tag">' + SC.esc(reason) + '</span>' +
+               '</span>';
+      }
+      var cls = 'sc-nav__item' + (isActive ? ' is-active' : '');
+      return '<a class="' + cls + '" href="' + SC.esc(m.href) + '" title="' + SC.esc(m.label) + '" data-menu="' + SC.esc(m.key) + '" data-od-id="nav-' + SC.esc(m.key) + '"' + (isActive ? ' aria-current="page"' : '') + '>' +
              itemInner(m) +
-             '</' + tag + '>';
+             '</a>';
     }
 
-    function groupHTML(m) {
-      // 父目录本身不对应任何页面，只负责收起/展开——不渲染成链接，不参与 activeKey 匹配。
-      var childActive = m.children.some(function (c) { return c.key === activeKey; });
-      var expanded = navGroupExpanded(m.key);
-      var groupId = navGroupKey(m.key);
-      var toggleLabel = (expanded ? '收起' : '展开') + m.label + '子目录';
-      return '<div class="sc-nav__group" data-nav-group="' + m.key + '">' +
-        '<button type="button" class="sc-nav__item sc-nav__item--parent' + (childActive ? ' has-active-child' : '') + '" data-nav-toggle="' + m.key + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" title="' + toggleLabel + '" data-od-id="nav-' + m.key + '">' +
-          itemInner(m, true) +
-          '<span class="sc-nav__caret" aria-hidden="true">' + SC.icon('chevron', 14) + '</span>' +
-        '</button>' +
-        '<div class="sc-nav__children" id="' + groupId + '"' + (expanded ? '' : ' inert') + '>' +
-          '<div class="sc-nav__children-inner">' +
-            m.children.map(function (c) { return itemHTML(c, 'sc-nav__item--child'); }).join('') +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }
-
-    var list = items.map(function (m) {
-      return m.children ? groupHTML(m) : itemHTML(m);
-    }).join('');
+    var list = items.map(itemHTML).join('');
 
     return '<div class="sc-nav-shell" data-nav-role="' + role + '" data-collapsed="' + collapsed + '" data-od-id="sidebar">' +
       '<button class="sc-nav-backdrop" type="button" tabindex="-1" aria-label="收起导航" data-od-id="nav-backdrop"></button>' +
@@ -159,20 +129,8 @@ window.SC = window.SC || {};
       }
     }
 
-    function setGroupExpanded(btn, open) {
-      var children = document.getElementById(navGroupKey(btn.dataset.navToggle));
-      var label = btn.querySelector('.sc-nav__label').textContent;
-      if (!open && children && children.contains(document.activeElement)) btn.focus();
-      btn.setAttribute('aria-expanded', String(open));
-      btn.title = (open ? '收起' : '展开') + label + '子目录';
-      if (children) children.toggleAttribute('inert', !open);
-    }
-
     function syncNavigation() {
       setCollapsed(navigationCollapsed(), false);
-      nav.querySelectorAll('[data-nav-toggle]').forEach(function (btn) {
-        setGroupExpanded(btn, navGroupExpanded(btn.dataset.navToggle));
-      });
     }
 
     toggle.addEventListener('click', function () {
@@ -184,14 +142,6 @@ window.SC = window.SC || {};
     });
     nav.querySelector('.sc-logout').addEventListener('click', function (event) {
       confirmLogout(event.currentTarget);
-    });
-    nav.querySelectorAll('[data-nav-toggle]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var key = btn.dataset.navToggle;
-        var open = btn.getAttribute('aria-expanded') !== 'true';
-        setGroupExpanded(btn, open);
-        saveNavigationSetting(navGroupKey(key), open);
-      });
     });
     nav.addEventListener('click', function (event) {
       if (event.target.closest('a[href]')) rememberScroll();
@@ -220,7 +170,7 @@ window.SC = window.SC || {};
     }
     function onViewport() { setCollapsed(navigationCollapsed(), false); }
     function onStorage(event) {
-      if (!event.key || event.key === navigationKey() || event.key.indexOf('sc-nav-group-') === 0)
+      if (!event.key || event.key === navigationKey())
         syncNavigation();
     }
     function onPageShow() {
@@ -284,8 +234,8 @@ window.SC = window.SC || {};
         logoutDialog = null;
         app.toggleAttribute('inert', wasInert);
         if (confirmed) {
-          try { sessionStorage.removeItem(SC.B2?.sessionKey || 'sc-prototype-identity'); } catch (_) {}
-          location.replace(new URL('login.html', pageAddress()).href);
+          try { sessionStorage.removeItem('sc-v02-session'); } catch (_) {}
+          location.replace(new URL('../index.html', pageAddress()).href);
         } else {
           var target = trigger.isConnected ? trigger : app.querySelector('.sc-logout');
           if (target && !target.closest('[inert]')) target.focus();
@@ -370,13 +320,13 @@ window.SC = window.SC || {};
       var isPage = url.pathname.indexOf(pageDirectory) === 0 &&
         /^[^/]+\.html$/.test(url.pathname.slice(pageDirectory.length));
       return url.origin === root.origin && url.protocol === root.protocol &&
-        (isPage || url.pathname === root.pathname + 'index.html') ? url : null;
+        isPage ? url : null;
     } catch (e) { return null; }
   }
 
   function navigationHref(href, opts) {
     var url = projectPage(href);
-    if (!url || url.pathname === new URL('../index.html', pageAddress()).pathname) return href;
+    if (!url) return href;
     var params = new URLSearchParams(location.search);
     url.searchParams.set('role', opts.role);
     if (params.get('as') && (!params.get('role') || params.get('role') === opts.role)) {
@@ -385,15 +335,22 @@ window.SC = window.SC || {};
     return url.href;
   }
 
+  function retainedFeaturePage(href) {
+    var url = projectPage(href);
+    if (!url) return null;
+    var retained = Object.keys(SC.MENU || {}).some(function (role) {
+      return (SC.MENU[role] || []).some(function (item) {
+        var target = item.href && projectPage(item.href);
+        return target && target.pathname === url.pathname;
+      });
+    });
+    return retained ? url : null;
+  }
+
   function findMenuItem(role, key) {
     var items = SC.MENU[role] || [];
     for (var i = 0; i < items.length; i++) {
       if (items[i].key === key) return items[i];
-      if (items[i].children) {
-        for (var j = 0; j < items[i].children.length; j++) {
-          if (items[i].children[j].key === key) return items[i].children[j];
-        }
-      }
     }
     return null;
   }
@@ -411,7 +368,7 @@ window.SC = window.SC || {};
     });
   }
 
-  function previousPage() {
+  function previousPage(fallbackHref) {
     // Native history entries also cover programmatic links and restored pages.
     var navigation = window.navigation;
     var href = document.referrer;
@@ -423,41 +380,49 @@ window.SC = window.SC || {};
       if (previous) href = previous.url;
       else if (navigation.currentEntry.index === 0) return null;
     }
-    var url = projectPage(href);
-    return history.length > 1 && url && url.href !== pageAddress().href ? url : null;
+    var url = retainedFeaturePage(href);
+    var fallback = projectPage(fallbackHref);
+    var sameIdentity = url && fallback && ['role', 'as'].every(function (name) {
+      return url.searchParams.get(name) === fallback.searchParams.get(name);
+    });
+    return history.length > 1 && sameIdentity && url.href !== pageAddress().href ? url : null;
   }
 
   function wirePageBack() {
     var back = document.getElementById('sc-page-back');
     if (!back) return;
-    var previous = previousPage();
-    if (previous) back.href = previous.href;
+    var fallback = back.getAttribute('href');
+    var previous = previousPage(fallback);
+    if (previous) {
+      back.href = previous.href;
+      back.title = '返回上一页';
+    }
     back.addEventListener('click', function (event) {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-      if (previousPage()) {
+      var target = previousPage(fallback);
+      if (target) {
         event.preventDefault();
         history.back();
+      } else if (fallback) {
+        // 历史记录可能在页面停留期间被清空，恢复安全父级链接，避免沿用旧历史地址。
+        back.href = fallback;
+        back.title = back.dataset.backLabel || '返回上一页';
       }
     });
   }
 
   function topHTML(opts) {
     var role = opts.role;
-    var parents = pageCrumbs(opts);
-    var backHref = '../index.html';
-    parents.forEach(function (item) { if (item.href) backHref = item.href; });
-
-    var crumb = '<nav class="sc-crumb" aria-label="页面导航" data-od-id="page-breadcrumb">' +
-      '<ol class="sc-crumb__list"><li><a href="../index.html" title="返回销售指挥官" data-od-id="breadcrumb-home">销售指挥官</a></li>';
-    parents.forEach(function (c, index) {
-      crumb += '<li><span class="sc-crumb__sep" aria-hidden="true">/</span>' + (c.href
-        ? '<a href="' + SC.esc(c.href) + '" data-od-id="breadcrumb-parent-' + index + '">' + SC.esc(c.t) + '</a>'
-        : '<span>' + SC.esc(c.t) + '</span>') + '</li>';
-    });
-    crumb += '<li><span class="sc-crumb__sep" aria-hidden="true">/</span>' +
-             '<span class="sc-crumb__cur" aria-current="page" data-od-id="breadcrumb-current">' + SC.esc(opts.title) + '</span>' +
-             (opts.pid ? '<span class="sc-pid">' + opts.pid + '</span>' : '') +
-             '</li></ol></nav>';
+    // 顶部只保留当前操作条条目，避免返回登录入口、面包屑层级和内部原型编号干扰工作区。
+    var back = opts.back && opts.back.href ? opts.back : null;
+    var backLabel = back && back.label ? back.label : '返回上一页';
+    var backHref = back ? navigationHref(back.href, opts) : '';
+    var backHTML = back ? '<a class="sc-page-back" id="sc-page-back" href="' + SC.esc(backHref) +
+      '" aria-label="返回上一页" title="' + SC.esc(backLabel) + '" data-back-fallback="' + SC.esc(backHref) +
+      '" data-back-label="' + SC.esc(backLabel) + '" data-od-id="page-back">' + SC.icon('chevron', 18) + '</a>' : '';
+    var crumb = '<nav class="sc-crumb" aria-label="当前操作" data-od-id="page-breadcrumb">' +
+      '<span class="sc-crumb__cur" aria-current="page" data-od-id="breadcrumb-current">' + SC.esc(opts.title) + '</span>' +
+      '</nav>';
 
     var roleOpts = Object.keys(SC.MENU).map(function (r) {
       return '<option value="' + r + '"' + (r === role ? ' selected' : '') + '>' + D.ROLES[r].name + '</option>';
@@ -465,7 +430,7 @@ window.SC = window.SC || {};
 
     return '<header class="sc-top" data-od-id="page-topbar">' +
       '<div class="sc-page-navigation">' +
-        '<a class="sc-page-back" id="sc-page-back" href="' + SC.esc(backHref) + '" aria-label="返回上一页" title="返回上一页" data-od-id="page-back">' + SC.icon('chevron', 18) + '</a>' +
+        backHTML +
         crumb +
       '</div>' +
       '<div class="sc-roleswitch">' +
@@ -491,10 +456,9 @@ window.SC = window.SC || {};
       if (target) {
         var url = new URL(target, pageAddress());
         url.searchParams.set('role', sel.value);
-        if (SC.B2?.defaults[sel.value]) url.searchParams.set('as', SC.B2.defaults[sel.value]);
         location.href = url.href;
       } else {
-        SC.toast(D.ROLES[sel.value].name + '的页面属原型批 3，尚未交付', 'bad');
+        SC.toast(D.ROLES[sel.value].name + '暂无可用页面', 'bad');
         sel.value = sel.dataset.cur;
       }
     });
@@ -504,27 +468,13 @@ window.SC = window.SC || {};
   /* ---------------------------------------------- 页面入口 */
 
   /**
-   * @param {Object} opts  {role, menu, pid, title, desc, crumb, actions}
+   * @param {Object} opts  {role, menu, pid, title, desc, crumb, actions, back}
    * @param {Function} render  render(contentEl) —— 在内容区渲染页面主体
    */
   SC.page = function (opts, render) {
     var originalOpts = opts;
-    var identity = SC.B2?.identity(opts.role);
-    var denied = identity && (!identity.valid || identity.role !== opts.role);
-    if (SC.B2) {
-      SC.B2.refreshOrganisation();
-      var currentRole = D.ROLES[identity.role] ? identity.role : opts.role;
-      if (identity.person && D.CURRENT[currentRole]) {
-        D.CURRENT[currentRole] = Object.assign({}, D.CURRENT[currentRole], {
-          name: identity.person.name, group: identity.person.group,
-          pool: identity.person.pool ? SC.B2.name('pools', identity.person.pool) : ''
-        });
-      }
-      opts = Object.assign({}, opts, { role: currentRole });
-      SC.B2.role = currentRole;
-    }
     SC.rerender = function () { SC.page(originalOpts, render); };
-    document.title = opts.title + ' · 销售指挥官 V1.0';
+    document.title = opts.title + ' · 销售指挥官 V0.2';
 
     var app = document.getElementById('sc-app');
     unwireNavigation();
@@ -554,27 +504,7 @@ window.SC = window.SC || {};
 
     var body = document.getElementById('sc-page-body');
     var actions = document.getElementById('sc-page-actions');
-    if (denied) body.innerHTML = SC.empty({ title: '无权访问', reason: '当前身份、账号或角色不允许访问此页面。' });
-    else if (render) render(body, actions);
-    if (identity) {
-      document.querySelectorAll('.sc-nav a, #sc-page-body a, #sc-page-actions a').forEach(function (a) {
-        var raw = a.getAttribute('href');
-        if (!raw || raw[0] === '#' || a.hasAttribute('download')) return;
-        var u = new URL(a.href);
-        if (u.origin !== pageAddress().origin || !/\/pages\/[^/]+\.html$/.test(u.pathname) || u.pathname.endsWith('/login.html')) return;
-        if (!u.searchParams.has('role')) u.searchParams.set('role', identity.role);
-        if (!u.searchParams.has('as') && u.searchParams.get('role') === identity.role) u.searchParams.set('as', identity.id || '');
-        a.href = u.href;
-      });
-    }
-  };
-
-  /** 无框架页面（登录页、导航页） */
-  SC.bare = function (title, render) {
-    unwireNavigation();
-    document.title = title + ' · 销售指挥官 V1.0';
-    var app = document.getElementById('sc-app');
-    if (render) render(app);
+    if (render) render(body, actions);
   };
 
 })(window.SC);

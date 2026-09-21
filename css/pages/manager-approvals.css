@@ -1,7 +1,0 @@
-/* P-MGR-02: 客保审批 */
-.b3[data-page="P-MGR-02"] .b2-table td:first-child:not(.b2-check) {
-  min-width: 240px;
-}
-.b3[data-page="P-MGR-02"] .b3-form {
-  border-top: 1px solid var(--border);
-}

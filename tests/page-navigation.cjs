@@ -1,452 +1,322 @@
-// Run with node --test tests/page-navigation.cjs; requires jsdom.
+// V0.2 保留页面的导航回归：检查公共框架、当前操作条和静态资源引用。
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { JSDOM, VirtualConsole } = require('jsdom');
+
 const root = path.resolve(__dirname, '..');
 const base = 'http://prototype.test/project/pages/';
+const featurePages = [
+  'customer-spaces', 'customer-ownership', 'followup-workbench', 'meeting-center', 'employee-insights',
+  'data-insights', 'push-followup', 'platform-data', 'message-center',
+  'sales-assistant', 'solution-center', 'solution-workbench', 'solution-push', 'solution-feedback', 'operations-config', 'product-library',
+  'conversation-review', 'today-follow', 'insight-ops', 'daily-report', 'ai-capability', 'sales-goals'
+];
+const retainedPages = [...featurePages];
+// 跟进工作台路径当前承载客户空间，是「客户跟进空间」的次级页面，不进入一级菜单。
+const secondaryPages = ['followup-workbench', 'solution-push', 'solution-feedback'];
+const retiredRuntimePattern = /(?:batch2\/|batch3\/|m02-|identity-bridge|organisation|people-import|xlsx-read|js\/pages\/)/;
 
-function load(file, query = '', setup = () => {}, referrer = '', embedded = false) {
-  let html = fs.readFileSync(path.join(root, 'pages', file), 'utf8');
-  if (embedded) html = html.replace('<head>', '<head><base href="' + base + '">');
+function load(file, query = '', options = {}) {
+  const html = fs.readFileSync(path.join(root, 'pages', file), 'utf8');
+  const errors = [];
   const dom = new JSDOM(html, {
-    url: embedded ? 'about:blank' : base + file + query,
-    ...(referrer ? { referrer } : {}),
+    url: base + file + query,
+    referrer: options.referrer || undefined,
     runScripts: 'outside-only',
     pretendToBeVisual: true,
-    virtualConsole: new VirtualConsole(),
+    virtualConsole: new VirtualConsole().on('jsdomError', error => errors.push(error.message)),
   });
   const w = dom.window;
-  if (embedded) {
-    for (const name of ['localStorage', 'sessionStorage']) {
-      const data = new Map();
-      Object.defineProperty(w, name, { value: {
-        getItem: key => data.get(key) ?? null,
-        setItem: (key, value) => data.set(key, String(value)),
-        removeItem: key => data.delete(key),
-      } });
-    }
-  }
   w.scrollTo = () => {};
   w.Date.now = () => 1788854400000;
   let seed = 1;
   w.Math.random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const overrides = setup(w) || {};
-  const errors = [];
+  options.beforeScripts?.(w);
   for (const script of w.document.querySelectorAll('script[src]')) {
-    // Resolve like a real HTTP server: the cache-busting query (?v=...) is not part of the file path.
     const cleanSrc = script.getAttribute('src').replace(/[?#].*$/, '');
-    const src = path.resolve(root, 'pages', cleanSrc);
-    try {
-      const source = fs.readFileSync(src, 'utf8');
-      if (overrides.location && cleanSrc === '../js/layout.js') {
-        new w.Function('location', source)(overrides.location);
-      } else w.eval(source);
+    const source = path.resolve(root, 'pages', cleanSrc);
+    try { w.eval(fs.readFileSync(source, 'utf8')); }
+    catch (error) { errors.push(`${path.relative(root, source)}: ${error.message}`); }
+  }
+  return { dom, doc: w.document, errors };
+}
+
+function assertLocalLinks(doc, page) {
+  for (const anchor of doc.querySelectorAll('a[href]')) {
+    const url = new URL(anchor.href);
+    if (url.origin !== 'http://prototype.test') continue;
+    const relative = url.pathname.replace('/project/', '');
+    const target = path.join(root, relative);
+    assert.ok(fs.existsSync(target), `${page}: missing ${relative}`);
+    if (target.endsWith('.html') && target.includes(`${path.sep}pages${path.sep}`)) {
+      assert.ok(retainedPages.some(name => target.endsWith(`${path.sep}${name}.html`)), `${page}: retired ${relative}`);
     }
-    catch (error) { errors.push({ script: path.relative(root, src), message: error.message }); }
   }
-  return { dom, w, doc: w.document, errors };
 }
 
-function labels(doc) {
-  return [...doc.querySelectorAll('.sc-crumb a, .sc-crumb__cur')].map(el => el.textContent);
+function assertLocalAssets(doc, page) {
+  for (const node of doc.querySelectorAll('link[href], script[src]')) {
+    const raw = node.getAttribute('href') || node.getAttribute('src');
+    const source = path.resolve(root, 'pages', raw.replace(/[?#].*$/, ''));
+    assert.ok(fs.existsSync(source), `${page}: missing asset ${path.relative(root, source)}`);
+  }
 }
 
-test('all framed pages expose a current location, working parent links and a back entry', () => {
-  let count = 0;
-  // Legacy sub-pages merged into audit-query's tabs; kept as forwarding stubs for old links/bookmarks.
-  const REDIRECTS = { 'audit-object.html': 'object', 'audit-pending.html': 'pending' };
-  for (const file of fs.readdirSync(path.join(root, 'pages')).filter(f => f.endsWith('.html'))) {
-    const { dom, doc, errors } = load(file);
+test('保留页面都能加载，并且没有旧批次页面引用', () => {
+  const files = fs.readdirSync(path.join(root, 'pages')).filter(file => file.endsWith('.html'));
+  assert.deepEqual(files.sort(), retainedPages.map(page => `${page}.html`).sort());
+  for (const page of retainedPages) {
+    const { dom, doc, errors } = load(`${page}.html`);
     try {
-      if (file === 'login.html') {
-        assert.equal(doc.querySelector('.sc-top'), null);
-        continue;
-      }
-      if (['my-request.html', 'request-form.html', 'customer-search.html', 'sea-customer.html', 'manager-approval.html', 'manager-admission.html', 'manager-assign.html', 'manager-admission-records.html', 'approval-detail.html', 'admission-detail.html', 'combo-detail.html', 'product-detail.html', 'product-check.html', 'product-new.html', 'direct-assign.html', 'high-seas.html', 'source-review.html'].includes(file)) {
-        // 已退役为抽屉/重定向的详情页，不再渲染整页外壳。
-        assert.equal(doc.querySelector('.sc-crumb'), null, 'retired detail has no page shell');
-        assert.deepEqual(errors, []);
-        continue;
-      }
-      if (REDIRECTS[file]) {
-        assert.equal(doc.querySelector('.sc-crumb'), null, file + ': stub has no framed chrome');
-        const stub = fs.readFileSync(path.join(root, 'pages', file), 'utf8');
-        assert.match(stub, /audit-query\.html/, file + ': targets audit-query');
-        assert.match(stub, new RegExp("set\\('tab', '" + REDIRECTS[file] + "'\\)"), file + ': forwards tab');
-        assert.deepEqual(errors, [], file);
-        continue;
-      }
-      count++;
-      const trail = labels(doc);
-      assert.equal(trail[0], '销售指挥官', file);
-      assert.ok(trail.at(-1).trim(), file);
-      assert.equal(doc.querySelectorAll('.sc-crumb [aria-current="page"]').length, 1, file);
-      assert.equal(doc.querySelectorAll('#sc-page-back').length, 1, file);
-      assert.equal(doc.querySelector('#sc-page-back').getAttribute('aria-label'), '返回上一页');
-      const logout = doc.querySelector('[data-od-id="sidebar-user"] button.sc-logout');
-      assert.ok(logout, file + ': logout button');
-      assert.equal(doc.querySelectorAll('[data-od-id="sidebar-logout"]').length, 1, file);
-      assert.equal(logout.getAttribute('aria-label'), '退出登录');
-      assert.equal(logout.hasAttribute('href'), false);
-      assert.ok(logout.querySelector('svg polyline'), file + ': LogOut icon');
-      for (const link of doc.querySelectorAll('.sc-crumb a, #sc-page-back')) {
-        const url = new URL(link.href);
-        const relative = url.pathname.replace('/project/', '');
-        assert.ok(fs.existsSync(path.join(root, relative)), file + ': ' + relative);
-        assert.notEqual(url.pathname, '/project/pages/' + file, file + ': self-link');
-      }
-      assert.deepEqual(errors, [], file);
-    } finally { dom.window.close(); }
-  }
-  assert.equal(count, 46);
-});
-
-test('approval drawer stays on the decision desk and preserves the selected persona', () => {
-  const { dom, doc, w } = load('verdict.html', '?role=ADM&as=U-1001&request=REQ-3901');
-  try {
-    assert.deepEqual(labels(doc), ['销售指挥官', '客保裁决台']);
-    assert.match(doc.querySelector('[role="dialog"]').textContent, /REQ-3901/);
-    assert.equal(w.location.pathname, '/project/pages/verdict.html');
-    assert.equal(new URL(w.location.href).searchParams.get('as'), 'U-1001');
-    assert.equal(doc.querySelectorAll('#sc-page-back').length, 1);
-  } finally { dom.window.close(); }
-});
-
-test('embedded previews resolve detail and primary page hierarchy from their base URL', () => {
-  for (const [file, expected] of [
-    ['customer-detail.html', ['销售指挥官', '全量客户查看', '客户档案']],
-    ['verdict.html', ['销售指挥官', '客保裁决台']],
-  ]) {
-    const { dom, doc, errors } = load(file, '', () => {}, '', true);
-    try {
-      assert.deepEqual(errors, []);
-      assert.deepEqual(labels(doc), expected);
-      const target = new URL(doc.querySelector('#sc-page-back').href);
-      assert.equal(target.pathname, file === 'customer-detail.html' ? '/project/pages/customers.html' : '/project/index.html');
+      assert.deepEqual(errors, [], page);
+      assert.match(doc.title, /V0\.2$/, `${page}: current version title`);
+      assert.doesNotMatch(doc.documentElement.textContent, /V1\.0/, `${page}: retired version copy`);
+      assert.deepEqual(Object.keys(dom.window.SC.DATA).sort(), [
+        'CREDENTIALS_KEY', 'CURRENT', 'DEFAULT_CREDENTIALS', 'PEOPLE', 'PEOPLE_STATE_KEY',
+        'ROLES', 'getCredential', 'peopleSnapshot', 'setCredential'
+      ], `${page}: current identity data only`);
+      assertLocalLinks(doc, page);
+      assertLocalAssets(doc, page);
+      const retiredRuntime = [...doc.querySelectorAll('script[src]')].find(script =>
+        retiredRuntimePattern.test(script.getAttribute('src'))
+      );
+      assert.equal(retiredRuntime, undefined, `${page}: retired runtime dependency`);
+      assert.ok(doc.querySelector('.sc-crumb'), `${page}: breadcrumb`);
+      // 次级页面保留返回父级功能页的入口；一级页面的操作条不出现返回项。
+      if (secondaryPages.includes(page)) assert.ok(doc.querySelector('#sc-page-back'), `${page}: secondary page keeps parent back entry`);
+      else assert.equal(doc.querySelector('#sc-page-back'), null, `${page}: no login/back entry in operation bar`);
+      assert.equal(doc.querySelector('[data-od-id="breadcrumb-home"]'), null, `${page}: no login breadcrumb`);
+      assert.equal(doc.querySelector('.sc-pid'), null, `${page}: no prototype id in operation bar`);
+      assert.equal(doc.querySelector('.sc-crumb__cur')?.textContent.trim(),
+        doc.title.replace(/ · 销售指挥官 V0\.2$/, ''), `${page}: operation item title`);
+      assert.equal(doc.querySelectorAll('[data-od-id="sidebar-logout"]').length, 1, `${page}: logout entry`);
+      assert.equal(doc.querySelector('#sc-page-body.fp > .fp-title'), null, `${page}: no duplicate page title`);
+      assert.equal(doc.querySelector('#sc-page-body.fp .fp-eyebrow'), null, `${page}: no workspace eyebrow`);
+      assert.equal(doc.querySelector('#sc-page-body.fp > .fp-actions'), null, `${page}: no page-level demo actions`);
+      assert.doesNotMatch(doc.body.textContent, /本地演示 · 09\.15|原型导航/, `${page}: no prototype-only controls`);
     } finally { dom.window.close(); }
   }
 });
 
-test('shared customer pages use the corresponding role menu', () => {
-  for (const [role, parent, href] of [
-    ['ADM', '全量客户查看', 'customers.html'],
-    ['MGR', '本组客户', 'manager-customers.html'],
-    ['SLS', '我的客户', 'my-customers.html'],
-    ['SOL', '我的客户池', 'solution-pool.html'],
-  ]) {
-    const { dom, doc } = load('customer-detail.html', '?role=' + role);
+test('次级详情页显示安全返回按钮并指向父级功能页', () => {
+  const cases = [
+    {
+      file: 'followup-workbench.html',
+      query: '?role=MGR&as=U-1002&space=WS-201',
+      parent: 'customer-spaces.html',
+      label: '返回客户空间列表',
+      forbidden: ['solution']
+    },
+    {
+      // 不带 space 参数时同样是次级页面，不回退成一级工作台。
+      file: 'followup-workbench.html',
+      query: '?role=SLS&as=U-1004',
+      parent: 'customer-spaces.html',
+      label: '返回客户空间列表',
+      forbidden: ['solution']
+    },
+    {
+      file: 'followup-workbench.html',
+      query: '?role=SLS&as=U-1004&space=WS-201&tab=solutions&solution=SL-101',
+      parent: 'followup-workbench.html',
+      label: '返回客户空间',
+      required: { space: 'WS-201', tab: 'solutions' },
+      forbidden: ['solution']
+    },
+    {
+      file: 'meeting-center.html',
+      query: '?role=MGR&as=U-1002&meeting=MT-101',
+      parent: 'meeting-center.html',
+      label: '返回录音列表',
+      forbidden: ['meeting']
+    }
+  ];
+
+  for (const item of cases) {
+    const { dom, doc, errors } = load(item.file, item.query);
     try {
-      assert.deepEqual(labels(doc), ['销售指挥官', parent, '客户档案']);
-      assert.equal(new URL(doc.querySelector('#sc-page-back').href).pathname, '/project/pages/' + href);
-    } finally { dom.window.close(); }
-  }
-});
-
-test('product identity drawer retains its parent tab and selected identity', () => {
-  const { dom, doc, w } = load('products.html', '?role=ADM&as=U-1001&view=checks&check=PC-01');
-  try {
-    assert.deepEqual(labels(doc), ['销售指挥官', '产品管理']);
-    assert.equal(doc.querySelector('#product-tabs [aria-selected="true"]').dataset.tab, 'checks');
-    assert.equal(doc.querySelector('[role="dialog"]').getAttribute('aria-label'), '产品身份核对');
-    assert.equal(new URL(w.location.href).searchParams.get('as'), 'U-1001');
-  } finally { dom.window.close(); }
-});
-
-test('top-level pages retain two breadcrumb levels and fall back to the overview', () => {
-  const { dom, doc } = load('verdict.html');
-  try {
-    assert.deepEqual(labels(doc), ['销售指挥官', '客保裁决台']);
-    assert.equal(doc.querySelector('#sc-page-back').href, 'http://prototype.test/project/index.html');
-  } finally { dom.window.close(); }
-});
-
-test('internal back uses history, keeping the previous URL including filters', () => {
-  const referrer = base + 'verdict.html?role=ADM&as=U-1001&view=records';
-  let backCount = 0;
-  const { dom, w, doc } = load('verdict.html', '', w => {
-    Object.defineProperty(w.history, 'length', { value: 2 });
-    w.history.back = () => backCount++;
-  }, referrer);
-  try {
-    const back = doc.querySelector('#sc-page-back');
-    assert.equal(back.href, referrer);
-    const click = new w.MouseEvent('click', { bubbles: true, cancelable: true });
-    back.dispatchEvent(click);
-    assert.equal(click.defaultPrevented, true);
-    assert.equal(backCount, 1);
-    const modified = new w.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
-    back.addEventListener('click', e => e.preventDefault(), { once: true });
-    back.dispatchEvent(modified);
-    assert.equal(backCount, 1);
-  } finally { dom.window.close(); }
-});
-
-test('direct opens, new tabs and unrelated referrers use the parent fallback', () => {
-  for (const [referrer, length] of [
-    ['', 1],
-    [base + 'verdict.html?view=records', 1],
-    ['https://external.test/pages/verdict.html', 2],
-    ['http://prototype.test/other-project/pages/verdict.html', 2],
-    ['http://prototype.test/project/preview', 2],
-  ]) {
-    let called = false;
-    const { dom, w, doc } = load('verdict.html', '', w => {
-      Object.defineProperty(w.history, 'length', { value: length });
-      w.history.back = () => { called = true; };
-    }, referrer);
-    try {
+      assert.deepEqual(errors, [], `${item.file}: ${item.query}`);
       const back = doc.querySelector('#sc-page-back');
-      assert.equal(new URL(back.href).pathname, '/project/index.html');
-      back.addEventListener('click', e => e.preventDefault(), { once: true });
-      back.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
-      assert.equal(called, false);
+      assert.ok(back, `${item.file}: secondary page has back button`);
+      assert.equal(back.getAttribute('aria-label'), '返回上一页');
+      assert.equal(back.title, item.label);
+      assert.equal(back.dataset.backFallback, back.href);
+      const target = new URL(back.href);
+      const source = new URL(base + item.file + item.query);
+      assert.equal(target.pathname, `${base.replace('http://prototype.test', '')}${item.parent}`);
+      assert.equal(target.searchParams.get('role'), source.searchParams.get('role'));
+      assert.equal(target.searchParams.get('as'), source.searchParams.get('as'));
+      for (const name of item.forbidden || []) assert.equal(target.searchParams.has(name), false, `${item.file}: fallback removes ${name}`);
+      for (const [name, value] of Object.entries(item.required || {})) assert.equal(target.searchParams.get(name), value);
+      assert.notEqual(target.pathname, '/project/index.html', `${item.file}: fallback never targets login`);
     } finally { dom.window.close(); }
   }
 });
 
-test('native history entries take precedence over the original document referrer', () => {
-  const previous = base + 'approval-records.html?role=ADM';
-  const { dom, doc } = load('verdict.html', '', w => {
-    Object.defineProperty(w.history, 'length', { value: 3 });
-    w.navigation = {
-      currentEntry: { index: 2 },
-      entries: () => [{ index: 1, url: previous }, { index: 2, url: w.location.href }],
-    };
-  }, base + 'verdict.html');
-  try { assert.equal(doc.querySelector('#sc-page-back').href, previous); }
-  finally { dom.window.close(); }
-});
-
-test('rerendering and collapsing navigation do not change the route or duplicate back controls', () => {
-  const { dom, w, doc } = load('verdict.html', '?role=ADM&as=U-1001');
-  try {
-    const initial = labels(doc);
-    w.SC.B3.render();
-    assert.deepEqual(labels(doc), initial);
-    assert.equal(doc.querySelectorAll('#sc-page-back').length, 1);
-    const body = doc.querySelector('#sc-page-body');
-    const nav = doc.querySelector('#sc-navigation');
-    doc.querySelector('.sc-nav-toggle').click();
-    doc.querySelector('.sc-nav-toggle').click();
-    assert.equal(doc.querySelector('#sc-page-body'), body);
-    assert.equal(doc.querySelector('#sc-navigation'), nav);
-  } finally { dom.window.close(); }
-});
-
-const waitForDismissal = w => new Promise(resolve => w.setTimeout(resolve, 250));
-
-test('all four roles and legacy pages require explicit confirmation to log out', async () => {
-  for (const file of ['verdict.html', 'manager-home.html', 'sales-home.html', 'solution-pool.html', 'groups.html']) {
-    const destinations = [];
-    const { dom, w, doc, errors } = load(file, '', w => ({
-      location: { href: w.location.href, search: w.location.search, replace: url => destinations.push(url) },
-    }));
+test('一级页面和页签状态不会被误判为次级页面', () => {
+  const cases = [
+    ['customer-spaces.html', '?role=SLS&as=U-1004'],
+    ['operations-config.html', '?role=ADM&as=U-1001&tab=people'],
+    ['operations-config.html', '?role=ADM&as=U-1001&tab=crm&crmView=errors']
+  ];
+  for (const [file, query] of cases) {
+    const { dom, doc, errors } = load(file, query);
     try {
-      assert.deepEqual(errors, [], file);
-      const logout = doc.querySelector('.sc-logout');
-      const app = doc.querySelector('#sc-app');
-      const body = doc.querySelector('#sc-page-body');
-      const stored = Object.assign({}, w.localStorage);
-      logout.click();
-      logout.click();
-      assert.equal(doc.querySelectorAll('.sc-logout-confirm').length, 1);
-      const mask = doc.querySelector('.sc-logout-confirm');
-      assert.equal(mask.querySelector('#sc-logout-message').textContent, '是否要退出系统？');
-      assert.equal(mask.querySelector('[role="dialog"]').getAttribute('aria-describedby'), 'sc-logout-message');
-      assert.equal(app.hasAttribute('inert'), true);
-      assert.equal(doc.activeElement, mask.querySelector('[data-od-id="logout-cancel"]'));
-      assert.deepEqual(destinations, []);
-      mask.querySelector('[data-od-id="logout-cancel"]').click();
-      assert.equal(mask.isConnected, true, 'dismissal animates before removing the dialog');
-      await waitForDismissal(w);
-      assert.equal(doc.querySelector('.sc-logout-confirm'), null);
-      assert.equal(app.hasAttribute('inert'), false);
-      assert.equal(doc.activeElement, logout);
-      assert.equal(doc.querySelector('#sc-page-body'), body);
-      assert.deepEqual(destinations, []);
-      logout.click();
-      const confirm = doc.querySelector('[data-od-id="logout-confirm"]');
-      confirm.click();
-      confirm.click();
-      await waitForDismissal(w);
-      assert.deepEqual(destinations, [base + 'login.html']);
-      assert.deepEqual(Object.assign({}, w.localStorage), stored);
+      assert.deepEqual(errors, [], `${file}: ${query}`);
+      assert.equal(doc.querySelector('#sc-page-back'), null, `${file}: tab state has no page back button`);
     } finally { dom.window.close(); }
   }
 });
 
-test('mobile logout supports focus trapping, Escape, backdrop and close without exiting', async () => {
-  const destinations = [];
-  const { dom, w, doc } = load('sales-home.html', '', w => {
-    w.innerWidth = 390;
-    return { location: { href: w.location.href, search: '', replace: url => destinations.push(url) } };
+test('返回按钮优先使用同源功能页历史，并保留修饰键原生链接行为', async () => {
+  const parent = `${base}customer-spaces.html?role=MGR&as=U-1002`;
+  const detail = `${base}followup-workbench.html?role=MGR&as=U-1002&space=WS-201`;
+  const loaded = load('followup-workbench.html', '?role=MGR&as=U-1002&space=WS-201', {
+    referrer: parent,
+    beforeScripts: window => {
+      window.history.replaceState({ page: 'parent' }, '', parent);
+      window.history.pushState({ page: 'detail' }, '', detail);
+    }
   });
   try {
-    const toggle = doc.querySelector('.sc-nav-toggle');
-    toggle.click();
-    const logout = doc.querySelector('.sc-logout');
-    for (const dismiss of ['Escape', 'backdrop', 'close']) {
-      logout.click();
-      const mask = doc.querySelector('.sc-logout-confirm');
-      const close = mask.querySelector('.modal__x');
-      const confirm = mask.querySelector('[data-od-id="logout-confirm"]');
-      confirm.focus();
-      confirm.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
-      assert.equal(doc.activeElement, close);
-      close.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
-      assert.equal(doc.activeElement, confirm);
-      if (dismiss === 'Escape') confirm.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-      else if (dismiss === 'backdrop') mask.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true }));
-      else close.click();
-      await waitForDismissal(w);
-      assert.equal(doc.querySelector('.sc-logout-confirm'), null);
-      assert.equal(doc.querySelector('#sc-app').hasAttribute('inert'), false);
-      assert.equal(doc.activeElement, logout);
-      assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-      assert.deepEqual(destinations, []);
+    assert.deepEqual(loaded.errors, []);
+    const back = loaded.doc.querySelector('#sc-page-back');
+    assert.equal(back.href, parent);
+    assert.equal(back.title, '返回上一页');
+
+    const modified = new loaded.dom.window.MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ctrlKey: true });
+    back.dispatchEvent(modified);
+    assert.equal(modified.defaultPrevented, false, 'modified click keeps native link behavior');
+
+    const plain = new loaded.dom.window.MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    back.dispatchEvent(plain);
+    await new Promise(resolve => loaded.dom.window.setTimeout(resolve, 20));
+    assert.equal(plain.defaultPrevented, true, 'plain click uses history when an in-project entry exists');
+    assert.equal(loaded.dom.window.location.href, parent);
+  } finally { loaded.dom.window.close(); }
+});
+
+test('外部来源不会成为次级页面的返回目标', () => {
+  const loaded = load('followup-workbench.html', '?role=MGR&as=U-1002&space=WS-201', {
+    referrer: 'https://outside.example/customer/42'
+  });
+  try {
+    assert.deepEqual(loaded.errors, []);
+    const back = loaded.doc.querySelector('#sc-page-back');
+    assert.equal(new URL(back.href).pathname, '/project/pages/customer-spaces.html');
+    assert.equal(new URL(back.href).origin, 'http://prototype.test');
+  } finally { loaded.dom.window.close(); }
+});
+
+test('已退役页面历史不会覆盖次级页面的安全父级链接', () => {
+  const retired = `${base}retired-detail.html?role=MGR&as=U-1002`;
+  const detail = `${base}followup-workbench.html?role=MGR&as=U-1002&space=WS-201`;
+  const loaded = load('followup-workbench.html', '?role=MGR&as=U-1002&space=WS-201', {
+    referrer: retired,
+    beforeScripts: window => {
+      window.history.replaceState({ page: 'retired' }, '', retired);
+      window.history.pushState({ page: 'detail' }, '', detail);
     }
-    logout.click();
-    w.SC.B3.render();
-    doc.querySelector('[data-od-id="logout-cancel"]').click();
-    await waitForDismissal(w);
-    assert.equal(doc.querySelectorAll('.sc-logout').length, 1);
-    assert.equal(doc.activeElement, doc.querySelector('.sc-logout'));
-  } finally { dom.window.close(); }
-});
-
-function menuTree(nav) {
-  return [...nav.querySelectorAll('[data-menu], [data-nav-toggle]')].map(node => ({
-    key: node.dataset.menu || node.dataset.navToggle,
-    parent: node.closest('[data-nav-group]')?.dataset.navGroup || null,
-    label: node.querySelector('.sc-nav__label').textContent,
-    href: node.getAttribute('href') ? new URL(node.href).pathname : null,
-  }));
-}
-
-function sharedNavigationStore(w) {
-  const local = Object.assign({}, w.localStorage), session = Object.assign({}, w.sessionStorage);
-  return next => {
-    for (const [key, value] of Object.entries(local)) next.localStorage.setItem(key, value);
-    for (const [key, value] of Object.entries(session)) next.sessionStorage.setItem(key, value);
-  };
-}
-
-test('all pages use the same complete menu tree for each of the four roles', () => {
-  const expected = {}, counts = { ADM: 0, MGR: 0, SLS: 0, SOL: 0 };
-  for (const [role, actor] of [['ADM','U-1001'], ['MGR','U-1002'], ['SLS','U-1004'], ['SOL','U-1010']]) {
-    for (const file of fs.readdirSync(path.join(root,'pages')).filter(file => file.endsWith('.html'))) {
-      const {dom,doc,errors} = load(file,'?role='+role+'&as='+actor);
-      try {
-        assert.deepEqual(errors,[],role+' '+file);
-        const nav=doc.querySelector('#sc-navigation');if(!nav)continue;
-        const tree=menuTree(nav);
-        if(!expected[role]) expected[role]=tree;
-        assert.deepEqual(tree,expected[role],role+' '+file);
-        assert.equal(nav.querySelectorAll('[data-nav-toggle]').length,role==='ADM'?2:0,role+' '+file);
-        for(const button of nav.querySelectorAll('[data-nav-toggle]')) {
-          assert.equal(button.getAttribute('aria-expanded'),'true',file+' grouped menu visible on entry');
-          assert.equal(doc.getElementById(button.getAttribute('aria-controls')).hasAttribute('inert'),false);
-        }
-        for(const link of nav.querySelectorAll('a')) {
-          assert.equal(new URL(link.href).searchParams.get('role'),role,file+' menu role');
-          assert.equal(new URL(link.href).searchParams.get('as'),actor,file+' menu actor');
-        }
-        counts[role]++;
-      } finally {dom.window.close();}
-    }
-  }
-  assert.deepEqual(counts,{ADM:46,MGR:46,SLS:46,SOL:46});
-});
-
-test('parent menus stay expanded across primary pages, child pages and rerenders', () => {
-  let setup=()=>{};
-  for(const file of ['verdict.html','approval-records.html','handover.html','opportunity.html','workspace.html','admissions.html','products.html','people-detail.html']) {
-    const {dom,w,doc}=load(file,'?role=ADM&as=U-1001',setup);
-    try {
-      for(const key of ['verdictgrp','custmgmt'])
-        assert.equal(doc.querySelector('[data-nav-toggle="'+key+'"]').getAttribute('aria-expanded'),'true',file+' '+key);
-      (w.SC.B3?.render || w.SC.B2?.render || w.SC.rerender)();
-      for(const key of ['verdictgrp','custmgmt'])
-        assert.equal(doc.querySelector('[data-nav-toggle="'+key+'"]').getAttribute('aria-expanded'),'true',file+' rerender '+key);
-      setup=sharedNavigationStore(w);
-    } finally {dom.window.close();}
-  }
-});
-
-test('manual group collapse is respected even on active descendants and across pages', () => {
-  const first=load('verdict.html','?role=ADM&as=U-1001');
-  let setup;
+  });
   try {
-    first.doc.querySelector('[data-nav-toggle=verdictgrp]').click();
-    first.w.SC.B3.render();
-    assert.equal(first.doc.querySelector('[data-nav-toggle=verdictgrp]').getAttribute('aria-expanded'),'false');
-    assert.equal(first.doc.getElementById('sc-nav-group-verdictgrp').hasAttribute('inert'),true);
-    setup=sharedNavigationStore(first.w);
-  } finally {first.dom.window.close();}
-  for(const file of ['approval-records.html','handover.html','customers.html','workspace.html']) {
-    const {dom,doc,w}=load(file,'?role=ADM&as=U-1001',setup);
-    try {
-      assert.equal(doc.querySelector('[data-nav-toggle=verdictgrp]').getAttribute('aria-expanded'),'false',file);
-      assert.equal(doc.querySelector('[data-nav-toggle=custmgmt]').getAttribute('aria-expanded'),'true',file);
-      setup=sharedNavigationStore(w);
-    } finally {dom.window.close();}
-  }
+    assert.deepEqual(loaded.errors, []);
+    const target = new URL(loaded.doc.querySelector('#sc-page-back').href);
+    assert.equal(target.pathname, '/project/pages/customer-spaces.html');
+    assert.equal(target.searchParams.get('role'), 'MGR');
+    assert.equal(target.searchParams.get('as'), 'U-1002');
+  } finally { loaded.dom.window.close(); }
 });
 
-test('sidebar scroll and desktop/mobile collapse preferences survive navigation independently', () => {
-  const first=load('verdict.html','?role=ADM&as=U-1001');let setup;
-  try {
-    const scroller=first.doc.querySelector('.sc-nav__scroll');
-    scroller.scrollTop=144;scroller.dispatchEvent(new first.w.Event('scroll'));
-    first.w.SC.B3.render();assert.equal(first.doc.querySelector('.sc-nav__scroll').scrollTop,144);
-    first.doc.querySelector('.sc-nav-toggle').click();setup=sharedNavigationStore(first.w);
-  } finally {first.dom.window.close();}
-  const second=load('people-detail.html','?role=ADM&as=U-1001',setup);
-  try {
-    assert.equal(second.doc.querySelector('.sc-nav-shell').dataset.collapsed,'true');
-    assert.equal(second.doc.querySelector('.sc-nav__scroll').scrollTop,144);
-    second.doc.querySelector('.sc-nav-toggle').click();setup=sharedNavigationStore(second.w);
-  } finally {second.dom.window.close();}
-  const mobile=load('products.html','?role=ADM&as=U-1001',w=>{setup(w);w.innerWidth=390;});
-  try {
-    assert.equal(mobile.doc.querySelector('.sc-nav-shell').dataset.collapsed,'true');
-    mobile.doc.querySelector('.sc-nav-toggle').click();
-    assert.equal(mobile.w.localStorage.getItem('sc-nav-collapsed'),'false');
-    assert.equal(mobile.w.localStorage.getItem('sc-nav-collapsed-mobile'),'false');
-  } finally {mobile.dom.window.close();}
-});
-
-test('restored pages and other tabs synchronize navigation state without reloading content', () => {
-  const {dom,w,doc}=load('customers.html','?role=ADM&as=U-1001');
-  try {
-    const content=doc.querySelector('#sc-page-body');
-    w.localStorage.setItem('sc-nav-group-verdictgrp','false');
-    w.dispatchEvent(new w.StorageEvent('storage',{key:'sc-nav-group-verdictgrp',newValue:'false'}));
-    assert.equal(doc.querySelector('[data-nav-toggle=verdictgrp]').getAttribute('aria-expanded'),'false');
-    assert.equal(doc.getElementById('sc-nav-group-verdictgrp').hasAttribute('inert'),true);
-    w.localStorage.setItem('sc-nav-group-verdictgrp','true');
-    w.dispatchEvent(new w.Event('pageshow'));
-    assert.equal(doc.querySelector('[data-nav-toggle=verdictgrp]').getAttribute('aria-expanded'),'true');
-    assert.equal(doc.querySelector('#sc-page-body'),content);
-  } finally {dom.window.close();}
-});
-
-test('navigation resources have one shared version across every HTML entry', () => {
-  const assets = new Map([['js/menu.js',new Set()],['js/layout.js',new Set()],['css/layout.css',new Set()]]);
-  for(const file of [path.join(root,'index.html'), ...fs.readdirSync(path.join(root,'pages')).map(file=>path.join(root,'pages',file))]) {
-    if(!file.endsWith('.html'))continue;
-    const html=fs.readFileSync(file,'utf8');
-    for(const [asset, versions] of assets) {
-      for(const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
-        if(match[1].split('?')[0].endsWith(asset))versions.add(new URL(match[1],'http://test/').searchParams.get('v'));
+test('其他角色或演示身份的历史不会接管当前详情返回', () => {
+  const cases = [
+    `${base}customer-spaces.html?role=ADM&as=U-1001`,
+    `${base}customer-spaces.html?role=MGR&as=U-1003`
+  ];
+  const detail = `${base}followup-workbench.html?role=MGR&as=U-1002&space=WS-201`;
+  for (const previous of cases) {
+    const loaded = load('followup-workbench.html', '?role=MGR&as=U-1002&space=WS-201', {
+      referrer: previous,
+      beforeScripts: window => {
+        window.history.replaceState({ page: 'previous' }, '', previous);
+        window.history.pushState({ page: 'detail' }, '', detail);
       }
-    }
+    });
+    try {
+      assert.deepEqual(loaded.errors, []);
+      const back = loaded.doc.querySelector('#sc-page-back');
+      const target = new URL(back.href);
+      assert.equal(target.pathname, '/project/pages/customer-spaces.html');
+      assert.equal(target.searchParams.get('role'), 'MGR');
+      assert.equal(target.searchParams.get('as'), 'U-1002');
+      assert.equal(back.title, '返回客户空间列表');
+    } finally { loaded.dom.window.close(); }
   }
-  for(const [asset,versions] of assets) {assert.equal(versions.size,1,asset);assert.equal(versions.has(null),false,asset);}
-  const css=fs.readFileSync(path.join(root,'css/layout.css'),'utf8');
-  const imported=/navigation-ant\.css\?v=([^"')]+)/.exec(css);
-  assert.ok(imported,'navigation stylesheet is versioned');
-  assert.equal(imported[1],[...assets.get('css/layout.css')][0]);
+});
+
+test('V0.2 功能页的角色菜单只指向保留页面', () => {
+  for (const page of featurePages) {
+    const { dom, doc, errors } = load(`${page}.html`);
+    try {
+      assert.deepEqual(errors, [], page);
+      for (const anchor of doc.querySelectorAll('#sc-navigation a[href]')) {
+        const pathname = new URL(anchor.href).pathname;
+        assert.ok(pathname.endsWith('.html'), `${page}: menu target`);
+        assert.ok(retainedPages.some(name => pathname.endsWith(`/pages/${name}.html`)), `${page}: ${pathname}`);
+      }
+    } finally { dom.window.close(); }
+  }
+});
+
+test('各角色菜单不暴露当前身份无权访问的页面', () => {
+  const actors = { ADM: 'U-1001', MGR: 'U-1002', SLS: 'U-1004', SOL: 'U-1010' };
+  for (const [role, actor] of Object.entries(actors)) {
+    const source = load('customer-spaces.html', `?role=${role}&as=${actor}`);
+    try {
+      assert.deepEqual(source.errors, [], role);
+      const targets = [...source.doc.querySelectorAll('#sc-navigation a[href]')].map(anchor => new URL(anchor.href));
+      for (const target of targets) {
+        const page = path.basename(target.pathname);
+        const opened = load(page, target.search);
+        try {
+          assert.deepEqual(opened.errors, [], `${role}: ${page}`);
+          assert.doesNotMatch(opened.doc.body.textContent, /当前演示身份无权访问/, `${role}: ${page}`);
+        } finally { opened.dom.window.close(); }
+      }
+    } finally { source.dom.window.close(); }
+  }
+});
+
+test('退出登录会清理 V0.2 会话并回到根登录页', () => {
+  const source = fs.readFileSync(path.join(root, 'js/layout.js'), 'utf8');
+  assert.match(source, /sessionStorage\.removeItem\(['"]sc-v02-session['"]\)/);
+  assert.match(source, /location\.replace\(new URL\(['"]\.\.\/index\.html['"]/);
+});
+
+test('跟进工作台菜单位被封存：不可点击，但路径仍可访问并作为次级页面', () => {
+  const { dom, doc, errors } = load('customer-spaces.html', '?role=SLS&as=U-1004');
+  try {
+    assert.deepEqual(errors, [], 'customer-spaces');
+    const sealed = doc.querySelector('#sc-navigation [data-menu="followup-workbench"]');
+    assert.ok(sealed, '跟进工作台菜单位仍然保留');
+    assert.equal(sealed.tagName, 'SPAN', '封存条目不渲染为链接');
+    assert.equal(sealed.getAttribute('href'), null, '封存条目没有可点击目标');
+    assert.equal(sealed.getAttribute('aria-disabled'), 'true', '封存条目对辅助技术声明不可用');
+    assert.match(sealed.textContent, /本版未开放/, '封存条目说明未开放');
+    // 销售菜单第一项是客户跟进空间，角色切换不会落到封存页
+    const first = doc.querySelector('#sc-navigation a[href][data-menu]');
+    assert.equal(first.dataset.menu, 'customer-spaces', '销售菜单首个可用入口是客户跟进空间');
+  } finally { dom.window.close(); }
+
+  // 路径访问不受限制，并按次级页面渲染：父级菜单高亮 + 返回入口
+  const direct = load('followup-workbench.html', '?role=SLS&as=U-1004&space=WS-201');
+  try {
+    assert.deepEqual(direct.errors, [], 'followup-workbench direct');
+    assert.ok(direct.doc.querySelector('#fp-content').textContent.trim(), '直接输入路径仍能渲染客户空间');
+    assert.ok(direct.doc.querySelector('#sc-page-back'), '次级页面保留返回入口');
+    const active = direct.doc.querySelector('#sc-navigation .sc-nav__item.is-active');
+    assert.equal(active?.dataset.menu, 'customer-spaces', '高亮父级功能页而不是自身');
+    assert.equal(direct.doc.querySelector('[data-menu="followup-workbench"].is-active'), null, '封存条目不会被标为当前页');
+  } finally { direct.dom.window.close(); }
 });

@@ -198,87 +198,6 @@
   text-wrap: pretty;
 }
 
-.sc-nav-shell .sc-nav .sc-nav__item.is-pending {
-  color: var(--muted);
-  cursor: default;
-}
-
-.sc-nav-shell .sc-nav .sc-nav__item.is-pending:hover {
-  background: var(--surface);
-  color: var(--fg-2);
-}
-
-.sc-nav-shell .sc-nav .sc-nav__batch {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--space-1);
-  min-height: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1;
-}
-
-/* ---------------------------------------------- 可展开子目录（如“客户管理 > 全量客户查看 / 公海客户”）
-   父目录用 <button> 承载，复用 .sc-nav__item 的间距/悬停/焦点样式；本身不跳转，只切换 aria-expanded。 */
-
-.sc-nav-shell .sc-nav .sc-nav__item--parent {
-  width: 100%;
-  border: none;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.sc-nav-shell .sc-nav .sc-nav__item--parent.has-active-child {
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.sc-nav-shell .sc-nav .sc-nav__caret {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-left: auto;
-}
-
-.sc-nav-shell .sc-nav .sc-nav__caret .ico {
-  transform: rotate(-90deg);
-  transition: transform var(--motion-fast) var(--ease-standard);
-}
-
-.sc-nav-shell .sc-nav .sc-nav__item--parent[aria-expanded="true"] .sc-nav__caret .ico {
-  transform: rotate(0deg);
-}
-
-/* 高度用 grid-template-rows 在 0fr↔1fr 间过渡，可以平滑动画到内容的自然高度；
-   inert（而非 [hidden]）负责收起时禁用焦点与无障碍树，两者独立、互不影响过渡效果。 */
-.sc-nav-shell .sc-nav .sc-nav__children {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition: grid-template-rows var(--motion-base) var(--ease-standard);
-}
-
-.sc-nav-shell .sc-nav .sc-nav__item--parent[aria-expanded="false"] + .sc-nav__children {
-  grid-template-rows: 0fr;
-}
-
-.sc-nav-shell .sc-nav .sc-nav__children-inner {
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.sc-nav-shell .sc-nav .sc-nav__item.sc-nav__item--child {
-  margin-left: calc(var(--space-3) + 24px);
-}
-
 .sc-nav-shell .sc-nav > .sc-user.sc-user--nav {
   display: flex;
   justify-content: flex-start;
@@ -465,4 +384,31 @@
   .sc-nav-shell *,
   .sc-logout-confirm,
   .sc-logout-confirm * { transition: none !important; animation: none !important; }
+}
+
+/* 封存的菜单条目：说明版本规划但不可点击；路径访问不受影响。 */
+.sc-nav-shell .sc-nav .sc-nav__item.is-disabled {
+  cursor: not-allowed;
+  color: var(--fg-3);
+  background: none;
+}
+
+.sc-nav-shell .sc-nav .sc-nav__item.is-disabled:hover,
+.sc-nav-shell .sc-nav .sc-nav__item.is-disabled:active {
+  background: none;
+  color: var(--fg-3);
+}
+
+.sc-nav-shell .sc-nav .sc-nav__item.is-disabled .sc-nav__ico { opacity: .55; }
+
+.sc-nav-shell .sc-nav .sc-nav__tag {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  white-space: nowrap;
 }

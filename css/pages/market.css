@@ -1,8 +1,0 @@
-/* P-SLS-03: 商机市场 */
-.b3[data-page="P-SLS-03"] .b2-table td:first-child:not(.b2-check) {
-  min-width: 210px;
-}
-.b3[data-page="P-SLS-03"] .b3-form {
-  max-width: 960px;
-  margin-inline: auto;
-}

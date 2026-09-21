@@ -3,289 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>原型导航 · 销售指挥官 V1.0</title>
+<meta name="color-scheme" content="light">
+<title>登录 · 销售指挥官 V0.2</title>
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/layout.css?v=20260910-navigation">
 <link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/pages.css">
 </head>
-<body>
-<div class="hub">
-
-  <div class="hub__head">
-    <div class="hub__kicker">PRD-01 客户数据装载与工作空间建立　·　批 1 / 批 2 / 批 3</div>
-    <h1 class="hub__title">销售指挥官 V1.0 高保真原型</h1>
-    <p class="hub__desc">
-      批 1 平台底座与公共组件、批 2 数据与主数据 <b>16 页</b>、批 3 业务闭环 <b>34 页</b>。
-      批 2、批 3 共用本地演示数据；审批、准入、空间与交接结果跨页联动。
-      仅 PC 端；移动端不在 PRD-01 范围。
-    </p>
-  </div>
-
-  <section class="hub__group" id="batch3-index"></section>
-  <section class="hub__group" id="batch2-index"></section>
-
-  <!-- ============================================ 组件规范 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">公共组件规范</span>
-      <span class="hub__group-d">批 1 的核心交付物　·　评审请从这里开始</span>
+<body class="login-page">
+<main class="login-shell">
+  <section class="login-brand" aria-label="销售指挥官">
+    <div class="login-brand__head">
+      <span class="login-brand__mark" aria-hidden="true">SC</span>
+      <div>
+        <div class="login-brand__name">销售指挥官</div>
+        <div class="login-brand__edition">SALES COMMANDER · V0.2</div>
+      </div>
     </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/_components.html" style="border-color:var(--brand-300)">
-        <div class="hubcard__top">
-          <span class="badge badge--brand">C-01 ～ C-12</span>
-          <span class="hubcard__id">组件总览</span>
+    <div class="login-brand__body">
+      <span class="login-brand__eyebrow">WORKSPACE ACCESS</span>
+      <p class="login-brand__statement">连接客户、销售与方案协作的统一工作台。</p>
+    </div>
+    <div class="login-brand__status"><span aria-hidden="true"></span>V0.2 本地演示环境</div>
+  </section>
+
+  <section class="login-main" aria-labelledby="login-title">
+    <div class="login-panel">
+      <header class="login-panel__head">
+        <span class="login-panel__kicker">企业账号</span>
+        <h1 id="login-title">登录</h1>
+        <p>使用企业邮箱账号进入对应工作台。</p>
+      </header>
+
+      <form class="login-form" id="login-form" novalidate>
+        <div class="login-field">
+          <label for="login-email">企业邮箱</label>
+          <div class="login-affix">
+            <input id="login-email" name="email" type="text" inputmode="email" autocomplete="username" placeholder="请输入邮箱前缀" aria-describedby="login-error">
+            <span>@teddymobile.cn</span>
+          </div>
         </div>
-        <div class="hubcard__t">12 个公共组件的全部取值与呈现</div>
-        <div class="hubcard__d">空间状态、Agent 实例状态、商机状态三分区、客户池标签、组合-空间两层卡、
-          待办台、清单+详情、批量结果、转入确认、影响提示弹窗、空状态、依据引用</div>
-        <div class="hubcard__src">批 3 的 33 个页面几乎全部依赖这里的状态呈现</div>
-      </a>
-    </div>
-  </div>
 
-  <!-- ============================================ 跨角色共享 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">跨角色共享页</span>
-      <span class="hub__group-d">同一模板 + 按角色裁剪</span>
-    </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/login.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-CMN-01</span></div>
-        <div class="hubcard__t">登录页</div>
-        <div class="hubcard__d">邮箱前缀 + 固定后缀、停用与待分配角色的差异化提示。
-          V1.0 不做失败限速，无解锁入口</div>
-        <div class="hubcard__src">M01 §4.6</div>
-      </a>
-      <div class="hubcard">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-CMN-02</span></div>
-        <div class="hubcard__t">系统主框架</div>
-        <div class="hubcard__d">四套角色菜单 + 顶部信息区。已内嵌于所有页面，
-          可用页面右上「原型角色」切换查看四套菜单</div>
-        <div class="hubcard__src">M02-1 §4.1</div>
+        <div class="login-field">
+          <label for="login-password">密码</label>
+          <div class="login-password">
+            <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" aria-describedby="login-error">
+            <button id="password-toggle" type="button" aria-label="显示密码" title="显示密码">显示</button>
+          </div>
+        </div>
+
+        <div class="login-form__error" id="login-error" role="alert" aria-live="polite"></div>
+        <button class="btn btn--primary login-submit" id="login-submit" type="submit">登录</button>
+      </form>
+
+      <div class="login-demo">
+        <div class="login-demo__head">
+          <span>演示身份</span>
+          <small>本地原型账号</small>
+        </div>
+        <div class="login-demo__grid" id="login-accounts" aria-label="演示账号"></div>
       </div>
-      <a class="hubcard" href="pages/customer-detail.html">
-        <div class="hubcard__top"><span class="badge badge--sm">批 2</span>
-          <span class="hubcard__id">P-CMN-03</span></div>
-        <div class="hubcard__t">客户档案页</div>
-        <div class="hubcard__d">CRM 来源只读、本地新建可编辑</div>
-        <div class="hubcard__src">M05-1 §4.2 / §4.3</div>
-      </a>
-      <a class="hubcard" href="pages/combo-detail.html">
-        <div class="hubcard__top"><span class="badge badge--sm">批 3</span>
-          <span class="hubcard__id">P-CMN-05</span></div>
-        <div class="hubcard__t">经营组合详情页</div>
-        <div class="hubcard__d">7 个模块来源、10+ 区域，本轮聚合工作量最大的页面之一</div>
-        <div class="hubcard__src">M07-1、M08、M09、M10 等</div>
-      </a>
-    </div>
-  </div>
 
-  <!-- ============================================ 超管 · 人员与账号 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">超级管理员 › 人员与账号</span>
-      <span class="hub__group-d">M01 统一人员与账号身份</span>
+      <footer class="login-panel__foot">
+        <span>原型数据仅保存在当前浏览器</span>
+        <a href="prototype.html">功能原型导航</a>
+      </footer>
     </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/people-list.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-01</span></div>
-        <div class="hubcard__t">人员管理列表页</div>
-        <div class="hubcard__d">人员列表、批量启停、账号信息复制。
-          「停用」演示 C-10 影响提示弹窗与交接入口</div>
-        <div class="hubcard__src">M01 §4.1 / §4.5 / §4.8</div>
-      </a>
-      <a class="hubcard" href="pages/people-detail.html?id=U-1004">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-02</span></div>
-        <div class="hubcard__t">人员详情页</div>
-        <div class="hubcard__d">账号信息持续复制、密码重置、钉钉身份区（仅销售与主管可见）、
-          角色变更业务检查</div>
-        <div class="hubcard__src">M01 §4.4 / §4.7 / §4.8</div>
-      </a>
-      <a class="hubcard" href="pages/role-pool.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-03</span></div>
-        <div class="hubcard__t">待分配角色池页</div>
-        <div class="hubcard__d">角色留空的人员进入本池，未分配角色无法登录</div>
-        <div class="hubcard__src">M01 §4.3</div>
-      </a>
-      <a class="hubcard" href="pages/people-import.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-04</span></div>
-        <div class="hubcard__t">批量导入页（三步）</div>
-        <div class="hubcard__d">模板下载 → 检测结果（一行多问题全部展示）→ 导入结果。
-          超容量提示拆批，不静默截断</div>
-        <div class="hubcard__src">M01 §4.2</div>
-      </a>
-    </div>
-  </div>
+  </section>
+</main>
 
-  <!-- ============================================ 超管 · 销售分组 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">超级管理员 › 销售分组</span>
-      <span class="hub__group-d">M02-2 销售主管与销售分组</span>
-    </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/groups.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-05</span></div>
-        <div class="hubcard__t">销售分组页</div>
-        <div class="hubcard__d">分组列表、待分组销售清单与影响说明、批量分配。
-          分组关系决定主管可见范围与跨组判定</div>
-        <div class="hubcard__src">M02-2 §4.1 / §4.3</div>
-      </a>
-      <a class="hubcard" href="pages/group-detail.html?id=G-01">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-06</span></div>
-        <div class="hubcard__t">分组详情页</div>
-        <div class="hubcard__d">组内销售、加入成员（已分组只读不可选）、主管继任与待办影响</div>
-        <div class="hubcard__src">M02-2 §4.1 / §4.2 / §4.4</div>
-      </a>
-    </div>
-  </div>
-
-  <!-- ============================================ 超管 · 操作审计 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">超级管理员 › 操作审计</span>
-      <span class="hub__group-d">M03-1 事件记录口径与审计查询　·　M03-2 全量事件清单</span>
-    </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/audit-query.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-30</span></div>
-        <div class="hubcard__t">操作审计查询页</div>
-        <div class="hubcard__d">事件域 + 事件类型两层筛选，发生时间倒序。
-          仅超管可见，V1.0 不做导出</div>
-        <div class="hubcard__src">M03-1 §4.6、M03-2 §4.1</div>
-      </a>
-      <a class="hubcard" href="pages/audit-detail.html?id=E-90211">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-31</span></div>
-        <div class="hubcard__t">审计事件详情页</div>
-        <div class="hubcard__d">三维度操作身份（不合并为一个「操作人」）、关系快照前后对照、
-          依据引用按用途分组、更正痕迹</div>
-        <div class="hubcard__src">M03-1 §4.1 / §4.2 / §4.4 / §4.5</div>
-      </a>
-      <a class="hubcard" href="pages/audit-object.html?obj=U-1007">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-32</span></div>
-        <div class="hubcard__t">对象串联查询页</div>
-        <div class="hubcard__d">按业务对象标识串联全部事件。九类对象类型，标识终身不变</div>
-        <div class="hubcard__src">M03-1 §4.1 / §4.6</div>
-      </a>
-      <a class="hubcard" href="pages/audit-pending.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-33</span></div>
-        <div class="hubcard__t">留痕待补页</div>
-        <div class="hubcard__d">业务已生效但留痕未完成。恢复只补记事件，
-          不重新审批、不重做业务</div>
-        <div class="hubcard__src">M03-1 §4.7</div>
-      </a>
-    </div>
-  </div>
-
-  <!-- ============================================ 超管 · 基础数据配置 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">超级管理员 › 基础数据配置</span>
-      <span class="hub__group-d">M05-1 §4.6 基础字典　·　M03-2 §4.1 事件清单</span>
-    </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/dict-list.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-34</span></div>
-        <div class="hubcard__t">字典列表页</div>
-        <div class="hubcard__d">11 个字典。固定字典（角色、计费类型、空间状态、
-          Agent 状态）不提供操作入口</div>
-        <div class="hubcard__src">M05-1 §4.6</div>
-      </a>
-      <a class="hubcard" href="pages/dict-detail.html?id=D-04">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-35</span></div>
-        <div class="hubcard__t">字典详情页</div>
-        <div class="hubcard__d">选项、启停、排序。停用不影响已使用该选项的历史记录。
-          <a href="pages/dict-detail.html?id=D-08">查看固定字典形态</a></div>
-        <div class="hubcard__src">M05-1 §4.6</div>
-      </a>
-      <a class="hubcard" href="pages/event-catalog.html">
-        <div class="hubcard__top"><span class="badge badge--green badge--sm">批 1</span>
-          <span class="hubcard__id">P-ADM-36</span></div>
-        <div class="hubcard__t">事件清单查看页</div>
-        <div class="hubcard__d">六域 98 类事件与九项声明，只读对照。
-          域 A 15 类已展开</div>
-        <div class="hubcard__src">M03-2 §4.1</div>
-      </a>
-    </div>
-  </div>
-
-  <!-- ============================================ 空态占位 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">空态占位页</span>
-      <span class="hub__group-d">本期内容为空的 7 个菜单　·　菜单不隐藏，标注交付归属</span>
-    </div>
-    <div class="hub__grid">
-      <a class="hubcard" href="pages/placeholder.html?p=mgr-supervise">
-        <div class="hubcard__top"><span class="badge badge--amber badge--sm">空态</span>
-          <span class="hubcard__id">P-MGR-12</span></div>
-        <div class="hubcard__t">销售主管 › 审批监督</div>
-        <div class="hubcard__d">钉钉是审批唯一操作端，本系统只接收展示</div>
-        <div class="hubcard__src">PRD-03、PRD-05</div>
-      </a>
-      <a class="hubcard" href="pages/placeholder.html?p=sls-tasks">
-        <div class="hubcard__top"><span class="badge badge--amber badge--sm">空态</span>
-          <span class="hubcard__id">P-SLS-09</span></div>
-        <div class="hubcard__t">销售 › 跟进任务</div>
-        <div class="hubcard__d">另有录音管理、审批进展、方案需求、个人 Agent 对话共 5 个空菜单</div>
-        <div class="hubcard__src">PRD-02 ～ PRD-06</div>
-      </a>
-      <a class="hubcard" href="pages/placeholder.html?p=sol-tasks">
-        <div class="hubcard__top"><span class="badge badge--amber badge--sm">空态</span>
-          <span class="hubcard__id">P-SOL-03</span></div>
-        <div class="hubcard__t">解决方案人员 › 方案任务</div>
-        <div class="hubcard__d">本菜单是产品默认首页但本期为空，因此本期默认首页
-          临时调整为「我的客户池」</div>
-        <div class="hubcard__src">PRD-04</div>
-      </a>
-    </div>
-  </div>
-
-  <!-- ============================================ 说明 -->
-  <div class="hub__group">
-    <div class="hub__group-head">
-      <span class="hub__group-t">原型约定</span>
-    </div>
-    <div class="card"><div class="card__body">
-      <div class="u-f13 u-t2" style="line-height:2">
-        <b class="u-t1">原型脚手架，不是产品 UI</b>——以下两处仅用于原型导航，实现时应移除：<br>
-        · 侧栏菜单右侧的「<b>批2</b>／<b>批3</b>／<b>空</b>」标记，用于标注该页面属哪个交付批次；<br>
-        · 顶部的「<b>原型角色</b>」下拉，用于切换查看四套角色菜单。产品中<b>一人只对应一种角色</b>。<br><br>
-
-        <b class="u-t1">数据</b>——全部为虚构样例，不含真实客户或人员信息。批 2 筛选、分页、批量选择与操作结果为本地交互；不连接真实 CRM。<br><br>
-
-        <b class="u-t1">目录结构</b>——<span class="mono u-f12">css/</span>（tokens · base · layout · components · pages）、
-        <span class="mono u-f12">js/</span>（data · menu · components · layout）、
-        <span class="mono u-f12">js/pages/</span>（每页面一个）、
-        <span class="mono u-f12">pages/</span>（每页面一个 HTML）。
-        主框架由 <span class="mono u-f12">js/layout.js</span> 统一注入，页面 HTML 只声明容器。
-      </div>
-    </div></div>
-  </div>
-
-</div>
 <script src="js/data.js"></script>
-<script src="js/batch2/store.js"></script>
-<script src="js/organisation.js"></script>
-<script src="js/pages/batch2-index.js"></script>
-<script src="js/pages/batch3-index.js"></script>
+<script src="js/components.js"></script>
+<script src="js/login.js"></script>
 </body>
 </html>

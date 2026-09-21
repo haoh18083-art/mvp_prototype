@@ -1,7 +1,0 @@
-/* P-MGR-08: 准入终审详情 */
-.b3[data-page="P-MGR-08"] .b2-table td:first-child:not(.b2-check) {
-  min-width: 210px;
-}
-.b3[data-page="P-MGR-08"] .b3-form {
-  border-top: 1px solid var(--border);
-}

@@ -1,7 +1,0 @@
-/* P-CMN-07: 空间历史 */
-.b3[data-page="P-CMN-07"] .b2-table td:first-child {
-  min-width: 210px;
-}
-.b3[data-page="P-CMN-07"] .b3-form {
-  border-top: 1px solid var(--border);
-}

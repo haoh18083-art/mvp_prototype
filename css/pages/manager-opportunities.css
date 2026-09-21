@@ -1,7 +1,0 @@
-/* P-MGR-10: 商机管理 */
-.b3[data-page="P-MGR-10"] .b2-table td:first-child:not(.b2-check) {
-  min-width: 230px;
-}
-.b3[data-page="P-MGR-10"] .b3-form {
-  border-top: 1px solid var(--border);
-}

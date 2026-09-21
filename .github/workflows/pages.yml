@@ -32,12 +32,13 @@ jobs:
       - name: Prepare static site
         run: |
           mkdir -p _site
-          cp index.html _site/
-          cp -R css js pages assets _site/
+          cp index.html prototype.html _site/
+          cp -R css js pages _site/
           touch _site/.nojekyll
           VERSION_NAME=$(head -1 VERSION 2>/dev/null || echo "")
           printf '{"commit":"%s","version":"%s"}\n' "$GITHUB_SHA" "$VERSION_NAME" > _site/version.json
           test -s _site/index.html
+          test -s _site/prototype.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
