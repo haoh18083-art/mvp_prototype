@@ -96,7 +96,7 @@
       if (!F.actor || F.actor.role !== F.role || F.actor.status === 'off' || !allowed[key].includes(F.role)) {
         body.innerHTML = F.empty('当前演示身份无权访问此页面，请通过顶部角色菜单切换。'); return;
       }
-      body.className = 'fp';
+      body.className = 'fp' + (key === 'customer-ownership' ? ' fp-ownership' : '');
       // 页面名称统一由顶部操作条承载，主体直接进入业务内容，避免重复标题和演示入口占位。
       body.innerHTML = '<div id="fp-content" class="fp-stack"></div>';
       F.views[key](body.querySelector('#fp-content'));

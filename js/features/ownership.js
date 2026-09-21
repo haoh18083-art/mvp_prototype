@@ -13,7 +13,7 @@
     /** 当前归属：合并客户级与商机级确权，同一销售多商机合并为一个空间并可展开商机范围。 */
     function renderCurrent(item) {
       if (!item.current.length) {
-        return `<section class="fp-panel fp-pad" data-ownership-current="empty"><h3>当前归属</h3><p class="u-t3">该客户当前没有有效归属销售。</p>${item.history.length ? '<p class="fp-hint">历史归属过程见右侧，只读且不恢复任何权限。</p>' : ''}</section>`;
+        return `<section class="fp-panel fp-pad" data-ownership-current="empty"><h3>当前归属</h3><p class="u-t3">该客户当前没有有效归属销售。</p>${item.history.length ? '<p class="fp-hint">历史归属过程见下方，只读且不恢复任何权限。</p>' : ''}</section>`;
       }
       return `<section class="fp-panel" data-ownership-current="filled"><header class="fp-panel-head"><h3>当前归属</h3><span class="u-t3">${item.current.length} 位销售</span></header><div class="fp-pad fp-stack">${item.current.map(entry => {
         const frozen = entry.lifecycle === 'frozen';
@@ -30,8 +30,8 @@
     /** 历史归属：按时间展示进入、移除、恢复和事实类型，与当前归属分栏，且保持只读。 */
     function renderHistory(item) {
       return `<section class="fp-panel" data-ownership-history="${item.history.length ? 'filled' : 'empty'}"><header class="fp-panel-head"><h3>历史归属</h3><span class="u-t3">${item.history.length} 条过程记录</span></header><div class="fp-pad fp-stack">
-        <div class="fp-callout" data-ownership-readonly>历史记录只读：不改写当前归属，也不恢复任何销售的访问权限。</div>
-        ${item.history.length ? `<div class="fp-timeline">${item.history.map(record => `<article class="fp-event" data-history-change="${e(record.change)}"><div class="fp-actions"><strong>${e(record.name)}</strong>${F.badge(changeText[record.change] || record.change, changeTone[record.change] || 'neutral')}${F.badge(record.factType, 'neutral')}</div>${record.detail ? `<p>${e(record.detail)}</p>` : ''}<small>${e(record.at || '时间未知')}${record.batchId ? ` · 批次 ${e(record.batchId)}` : ''}${record.spaceId ? ` · 当时空间 ${e(record.spaceId)}` : ''}</small></article>`).join('')}</div>` : '<p class="u-t3">该客户暂无归属变化记录。</p>'}
+        <p class="fp-ownership-note" data-ownership-readonly>历史记录只读：不改写当前归属，也不恢复任何销售的访问权限。</p>
+        ${item.history.length ? `<div class="fp-ownership-history-summary" aria-hidden="true"><span>${item.history.length} 条记录</span><strong>仅回看 · 不恢复权限</strong></div><div class="fp-timeline">${item.history.map(record => `<article class="fp-event" data-history-change="${e(record.change)}"><div class="fp-actions"><strong>${e(record.name)}</strong>${F.badge(changeText[record.change] || record.change, changeTone[record.change] || 'neutral')}${F.badge(record.factType, 'neutral')}</div>${record.detail ? `<p>${e(record.detail)}</p>` : ''}<small>${e(record.at || '时间未知')}${record.batchId ? ` · 批次 ${e(record.batchId)}` : ''}${record.spaceId ? ` · 当时空间 ${e(record.spaceId)}` : ''}</small></article>`).join('')}</div>` : '<p class="u-t3">该客户暂无归属变化记录。</p>'}
       </div></section>`;
     }
 
@@ -50,10 +50,17 @@
       const all = F.ownership(state);
       const crm = state.crm || {};
       root.innerHTML = `<div class="fp-stack">
-        <div class="fp-callout">本视图只读：按客户解释当前由谁承接、空间是否可用，以及归属如何变化。不审批、不修改归属、不恢复历史权限，也不参与经营统计。</div>
-        ${F.metrics([['客户', all.length, '含仅有异常的客户'], ['当前归属关系', all.reduce((sum, item) => sum + item.current.length, 0), '销售 × 客户'], ['待对应人员', crm.pending || 0, '不计为有效归属'], ['未分配商机', crm.unassigned || 0, '需回 CRM 处理'], ['内容失败空间', all.reduce((sum, item) => sum + item.contentFailures.length, 0), '不显示为正常可用']])}
-        ${F.panel('客户归属分布', F.searchbar('搜索客户名称或客户编号', F.field('归属状态', 'status', '', 'select', [['', '全部客户'], ['owned', '有当前归属'], ['none', '无当前归属'], ['issue', '存在异常']])) + '<div data-ownership-results></div>')}
-        <div data-ownership-detail></div>
+        <div class="fp-ownership-metrics">
+          <section class="fp-ownership-metric-group" data-ownership-metric-group="distribution">
+            <h2>客户与归属</h2>
+            ${F.metrics([['客户', all.length, '含仅有异常的客户'], ['当前归属关系', all.reduce((sum, item) => sum + item.current.length, 0), '销售 × 客户']])}
+          </section>
+          <section class="fp-ownership-metric-group" data-ownership-metric-group="governance">
+            <h2>CRM 治理</h2>
+            ${F.metrics([['待对应人员', crm.pending || 0, '不计为有效归属'], ['未分配商机', crm.unassigned || 0, '需回 CRM 处理'], ['内容失败空间', all.reduce((sum, item) => sum + item.contentFailures.length, 0), '不显示为正常可用']])}
+          </section>
+        </div>
+        ${F.panel('客户归属分布', F.searchbar('搜索客户名称或客户编号', F.field('归属状态', 'status', '', 'select', [['', '全部客户'], ['owned', '有当前归属'], ['none', '无当前归属'], ['issue', '存在异常']])) + '<div data-ownership-results></div>', '<span class="fp-ownership-note" data-ownership-readonly>只读视图 · 不审批、不修改归属</span>')}
       </div>`;
       filter(query);
       F.handleSearch(root, filter);
@@ -68,28 +75,34 @@
       const rows = all.filter(item => {
         const matched = !keyword || `${item.customer} ${item.customerId}`.toLocaleLowerCase('zh-CN').includes(keyword);
         const issues = item.pending.length + item.unassigned.length + item.errors.length + item.contentFailures.length;
-        const status = !values.status || (values.status === 'owned' ? item.current.length > 0 : values.status === 'none' ? item.current.length === 0 : issues > 0);
+      const status = !values.status || (values.status === 'owned' ? item.current.length > 0 : values.status === 'none' ? item.current.length === 0 : issues > 0);
         return matched && status;
       });
       const body = rows.map(item => {
         const issues = item.pending.length + item.unassigned.length + item.errors.length + item.contentFailures.length;
         const types = [...new Set(item.current.map(entry => entitlementText(entry.entitlementType)))];
-        return `<tr data-ownership-row data-customer="${e(item.customerId)}"><td><strong>${e(item.customer)}</strong><small>${e(item.customerId)} · ${e(item.industry)}</small></td><td>${item.current.length ? item.current.map(entry => e(entry.name)).join('、') : '<span class="u-t3">无当前归属</span>'}</td><td>${types.length ? types.map(type => F.badge(type, 'brand')).join(' ') : '—'}</td><td>${item.current.filter(entry => entry.lifecycle === 'active').length} 进行中 / ${item.current.filter(entry => entry.lifecycle === 'frozen').length} 冻结</td><td>${issues ? F.badge(issues + ' 项异常', 'amber') : F.badge('正常', 'green')}</td><td>${item.history.length}</td><td>${F.button('查看归属', 'ownership-detail', item.customerId)}</td></tr>`;
+        const status = issues ? 'issue' : item.current.length ? 'owned' : 'none';
+        const isSelected = item.customerId === selected;
+        return `<tr data-ownership-row data-ownership-status="${status}" data-customer="${e(item.customerId)}" class="${isSelected ? 'is-selected' : ''}"${isSelected ? ' aria-current="true"' : ''}><td><strong>${e(item.customer)}</strong><small>${e(item.customerId)} · ${e(item.industry)}</small></td><td>${item.current.length ? item.current.map(entry => e(entry.name)).join('、') : '<span class="u-t3">无当前归属</span>'}</td><td>${types.length ? types.map(type => F.badge(type, 'brand')).join(' ') : '—'}</td><td>${item.current.filter(entry => entry.lifecycle === 'active').length} 进行中 / ${item.current.filter(entry => entry.lifecycle === 'frozen').length} 冻结</td><td>${issues ? F.badge(issues + ' 项异常', 'amber') : F.badge('正常', 'green')}</td><td>${item.history.length}</td><td>${F.button('查看归属', 'ownership-detail', item.customerId)}</td></tr>`;
       });
       root.querySelector('[data-ownership-results]').innerHTML = F.table(['客户', '当前归属销售', '确权类型', '空间状态', '异常', '历史记录', '操作'], body, { caption: '客户归属分布与空间状态', emptyMessage: '没有符合条件的客户，请调整搜索或筛选条件。', countLabel: '个客户', totalCount: all.length, compact: true });
-      renderDetail(rows.some(item => item.customerId === selected) ? selected : rows[0]?.customerId || '');
     }
 
-    function renderDetail(customerId) {
-      selected = customerId;
-      const target = root.querySelector('[data-ownership-detail]');
-      if (!target) return;
+    /** 详情抽屉只重组展示层级；当前归属、历史归属和异常的数据来源保持不变。 */
+    function openDetail(customerId) {
       const item = F.ownership().find(entry => entry.customerId === customerId);
-      if (!item) { target.innerHTML = ''; return; }
-      target.innerHTML = `<section class="fp-panel fp-pad fp-title"><div><h2>${e(item.customer)}</h2><p>${e(item.customerId)} · ${e(item.industry)}</p></div></section>${renderIssues(item)}<div class="fp-split fp-ownership-split">${renderCurrent(item)}${renderHistory(item)}</div>`;
+      if (!item) return;
+      selected = customerId;
+      root.querySelectorAll('[data-ownership-row]').forEach(row => {
+        const active = row.dataset.customer === customerId;
+        row.classList.toggle('is-selected', active);
+        if (active) row.setAttribute('aria-current', 'true');
+        else row.removeAttribute('aria-current');
+      });
+      F.drawer(`${e(item.customer)} · ${e(item.customerId)}`, `<div class="fp-stack">${renderIssues(item)}<div class="fp-split fp-ownership-split">${renderCurrent(item)}${renderHistory(item)}</div></div>`);
     }
 
-    F.bind(root, { 'ownership-detail': id => { renderDetail(id); root.querySelector('[data-ownership-detail]')?.scrollIntoView({ block: 'start' }); } });
+    F.bind(root, { 'ownership-detail': id => openDetail(id) });
     draw();
   };
 })(window.SC, window.SC.FEATURES);

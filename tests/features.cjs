@@ -767,30 +767,42 @@ test('R05 统一入口展示权限结果，同跟名单不泄露商机内容，�
 test('R06 客户归属视图分栏展示当前与历史，异常单独标注且历史只读', () => {
   const t = load('customer-ownership', '?role=MGR&as=U-1002');
   try {
-    // 4.1 当前归属：同客户多销售合并展示，确权类型与空间状态可判断
+    // 4.1 详情入口打开右侧抽屉，当前归属：同客户多销售合并展示，确权类型与空间状态可判断
+    assert.equal(t.doc.querySelector('.fp-overlay .fp-drawer'), null, '初始不渲染详情抽屉');
+    assert.ok(t.doc.querySelector('[data-ownership-metric-group="distribution"]'), '客户分布与治理指标应分组');
+    assert.ok(t.doc.querySelector('[data-ownership-metric-group="governance"]'), '客户分布与治理指标应分组');
     click(t, '[data-action=ownership-detail][data-value="C-1001"]');
-    const current = t.doc.querySelector('[data-ownership-current]');
+    const drawer = t.doc.querySelector('.fp-overlay .fp-drawer');
+    assert.ok(drawer, '查看归属应打开右侧抽屉');
+    const current = drawer.querySelector('[data-ownership-current]');
     assert.equal(current.dataset.ownershipCurrent, 'filled');
     assert.equal(current.querySelectorAll('[data-ownership-sales]').length, 2, '同客户两位当前归属销售');
     assert.ok(current.querySelector('[data-ownership-lifecycle]'), '展示空间生命周期');
     assert.ok(current.querySelector('[data-ownership-readiness]'), '展示内容就绪度');
 
     // 4.2 历史归属与当前分栏，并明确只读不恢复权限
-    const history = t.doc.querySelector('[data-ownership-history]');
+    const history = drawer.querySelector('[data-ownership-history]');
     assert.ok(history, '历史归属与当前归属分栏呈现');
     assert.match(history.querySelector('[data-ownership-readonly]').textContent, /不恢复任何销售的访问权限/);
+    assert.ok(history.querySelector('.fp-ownership-history-summary'), '历史条数提供紧凑摘要');
     assert.ok(history.querySelector('[data-history-change="added"]'), '按时间展示进入');
     assert.equal(history.querySelector('[data-action]'), null, '历史区域不提供写入或恢复操作');
 
     // 待对应人员不计为有效归属；未分配商机不建立销售空间
+    drawer.querySelector('[data-close]').click();
+    assert.equal(t.doc.querySelector('.fp-overlay .fp-drawer'), null, '关闭后移除详情抽屉');
     click(t, '[data-action=ownership-detail][data-value="C-1004"]');
-    const issues = t.doc.querySelector('[data-ownership-issues]');
+    const issues = t.doc.querySelector('.fp-overlay [data-ownership-issues]');
     assert.match(issues.querySelector('[data-issue="pending"]').textContent, /不计为有效归属销售/);
     assert.match(issues.querySelector('[data-issue="unassigned"]').textContent, /不建立销售空间/);
 
     // 内容失败的空间不显示为正常可用
+    const active = t.doc.querySelector('[data-ownership-row].is-selected');
+    assert.ok(active && active.dataset.customer === 'C-1004', '选中行应保持高亮');
+
+    t.doc.querySelector('.fp-overlay [data-close]').click();
     click(t, '[data-action=ownership-detail][data-value="C-1005"]');
-    assert.ok(t.doc.querySelector('[data-ownership-failure]'), '内容失败应单独标注');
+    assert.ok(t.doc.querySelector('.fp-overlay [data-ownership-failure]'), '内容失败应单独标注');
     assert.deepEqual(t.errors, []);
   } finally { t.close(); }
 
