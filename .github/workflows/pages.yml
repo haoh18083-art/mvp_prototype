@@ -27,18 +27,19 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Validate JavaScript
-        run: find js -type f -name '*.js' -print0 | xargs -0 -n 1 node --check
+        run: find js mobile-ios-sales-assistant/js -type f -name '*.js' -print0 | xargs -0 -n 1 node --check
 
       - name: Prepare static site
         run: |
           mkdir -p _site
           cp index.html prototype.html _site/
-          cp -R css js pages _site/
+          cp -R css js pages mobile-ios-sales-assistant _site/
           touch _site/.nojekyll
           VERSION_NAME=$(head -1 VERSION 2>/dev/null || echo "")
           printf '{"commit":"%s","version":"%s"}\n' "$GITHUB_SHA" "$VERSION_NAME" > _site/version.json
           test -s _site/index.html
           test -s _site/prototype.html
+          test -s _site/mobile-ios-sales-assistant/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

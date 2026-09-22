@@ -1,14 +1,18 @@
 /**
- * R10 录音管理：三方录音服务是唯一来源，本版不提供手动上传，也不做应用内录制。
+ * R10 录音管理：得到笔记（三方录音服务）是唯一来源，本版不提供手动上传，也不做应用内录制。
+ * 转写由三方完成，同步成功即带智能总结与原文；本系统不发起、不等待、不重试转写，
+ * 因此页面不出现任何转写状态，只区分同步情况与归位后的客户信息更新情况。
  * 页面契约（回归测试依赖）：data-recording-row 录音行、data-recording-state 归位情况、
  * data-sync-status 同步状态、data-placement-row 归位记录、data-placement-status 处理状态、
  * data-behavior-status 行为记录状态、data-unresolved 归属待处理清单。
+ * 录音详情抽屉默认展示录音内容：data-rec-content 内容区、data-rec-pane-tab 与 data-rec-pane
+ * 两栏（summary / transcript），与移动端同一套字段与文案。
  */
 (function (SC, F) {
   'use strict';
   const e = F.e;
-  // 旧链接与旧快照仍可能带解析流水线状态，这里只保留一份可读标签兜底。
-  F.meetingLabels = { synced: '已同步', failed: '同步失败', ready: '转写可用', waiting: '等待转写' };
+  // 旧链接与旧快照仍可能带解析流水线状态，这里只保留同步情况的可读标签兜底。
+  F.meetingLabels = { synced: '已同步', failed: '同步失败' };
 
   F.views['meeting-center'] = function (root) {
     let query = {};
@@ -29,7 +33,7 @@
       const state = F.load();
       const records = F.recordings(state);
       const unplaced = records.filter(item => F.recordingState(item, state) === 'unplaced' && item.syncStatus === 'synced');
-      const waiting = records.filter(item => F.recordingPlacements(item.id, state).some(p => p.status === 'waiting_transcript'));
+      const placed = records.filter(item => F.recordingPlacements(item.id, state).length);
       const failedSync = records.filter(item => item.syncStatus === 'failed');
       const failedUpdate = records.filter(item => F.recordingPlacements(item.id, state).some(p => p.status === 'failed'));
       const unresolved = F.unresolvedRecordings(state);
@@ -37,11 +41,11 @@
       root.innerHTML = F.metrics([
         ['录音总数', records.length, F.role === 'SLS' ? '归属本人的全部录音' : '当前可见范围内'],
         ['未归位', unplaced.length, '待选择客户空间与商机'],
-        ['等待转写', waiting.length, '已归位，客户信息尚未开始更新'],
+        ['已归位', placed.length, '已锚定客户空间与商机'],
         ['同步失败', failedSync.length, '可重新同步，不影响其余录音'],
         ['更新未完成', failedUpdate.length, '原内容保留，可按归位重试']
       ])
-        + '<div class="fp-callout" data-recording-source>录音由三方录音服务按其节奏同步进来，是本版唯一来源：不提供手动上传，也不做应用内录制；删除只在三方服务侧进行。归位成功不等于客户信息已更新。</div>'
+        + '<div class="fp-callout" data-recording-source>录音与转写均由得到笔记（三方录音服务）按其节奏同步进来，是本版唯一来源：不提供手动上传，也不做应用内录制；三方已完成转写，本系统只消费同步结果。归位成功不等于客户信息已更新。</div>'
         + F.panel('录音列表', F.searchbar('搜索录音名称 / 客户',
           F.field('归位情况', 'state', '', 'select', [['', '全部归位情况'], ...Object.entries(F.recordingStateMeta).map(([key, meta]) => [key, meta[0]])])
           + F.field('同步状态', 'sync', '', 'select', [['', '全部同步状态'], ['synced', '已同步'], ['failed', '同步失败']]))
@@ -67,22 +71,21 @@
         return true;
       });
       root.querySelector('[data-results]').innerHTML = F.table(
-        ['录音', '归属销售', '时长', '录音时间', '同步状态', '转写', '已归位位置', '操作'],
+        ['录音', '归属销售', '时长', '录音时间', '同步状态', '已归位位置', '操作'],
         rows.map(item => {
           const stateKey = F.recordingState(item, state);
           const stateMeta = F.recordingStateMeta[stateKey];
           const syncMeta = F.recordingSyncMeta[item.syncStatus] || ['已同步', 'green'];
-          const transMeta = F.transcriptMeta[item.transcriptStatus] || ['等待转写', 'brand'];
+          const sourceIssue = F.recordingSourceIssue(item);
           const canRetrySync = item.syncStatus === 'failed' && (F.role === 'ADM' || (F.role === 'SLS' && item.owner === F.actor?.id));
           return `<tr data-recording-row="${e(item.id)}" data-recording-state="${e(stateKey)}" data-sync-status="${e(item.syncStatus)}">
             <td><a href="${F.link('meeting-center', { meeting: item.id })}" data-action="open" data-value="${e(item.id)}">${e(item.title)}</a><small>${e(item.id)} · ${e(item.source)}</small></td>
             <td>${e(F.name(item.owner))}</td><td class="mono">${e(item.duration)}</td><td>${e(item.date)}</td>
-            <td>${F.badge(syncMeta[0], syncMeta[1])}${item.syncReason ? `<small>${e(item.syncReason)}</small>` : ''}</td>
-            <td>${F.badge(transMeta[0], transMeta[1])}<small>最近检查 ${e(item.transcriptCheckedAt || '—')}</small></td>
+            <td>${F.badge(syncMeta[0], syncMeta[1])}${item.syncReason ? `<small>${e(item.syncReason)}</small>` : sourceIssue ? `<small>${e(sourceIssue)}</small>` : '<small>含三方已完成的转写文本</small>'}</td>
             <td>${F.badge(stateMeta[0], stateMeta[1])}${placementSummary(item, state)}</td>
             <td>${F.button('查看详情', 'open', item.id)}${canRetrySync ? F.button('重新同步', 'resync', item.id) : ''}</td></tr>`;
         }),
-        { caption: '录音同步与归位列表', emptyMessage: '没有符合条件的录音；录音由三方服务同步进来后会出现在这里。', countLabel: '条录音', note: '同步、转写与归位处理分开记录', totalCount: F.recordings(state).length }
+        { caption: '录音同步与归位列表', emptyMessage: '没有符合条件的录音；录音由三方服务同步进来后会出现在这里。', countLabel: '条录音', note: '同步情况与归位后的处理结果分开记录', totalCount: F.recordings(state).length }
       );
     }
 
@@ -103,7 +106,7 @@
         + F.field('客户空间 *', 'space', first.id, 'select', targets.map(w => [w.id, `${w.customer} · ${w.pool || '待补客户池'}`]))
         + F.field('关联商机 *', 'opportunityId', first.opps.length === 1 ? first.opps[0].id : '', 'select', first.opps.length === 1 ? oppOptions(first) : [['', '请选择该空间下的一条商机'], ...oppOptions(first)])
         + `<p class="fp-hint" data-opp-hint>${first.opps.length > 1 ? '该空间下有多条商机，必须由你指定一条，系统不代选。' : '该空间下仅一条商机，已自动带出，可以修改。'}</p>`
-        + (recording && recording.transcriptStatus !== 'ready' ? '<p class="fp-hint" data-transcript-hint>该录音转写尚未可用：可以先归位，客户信息更新会等转写可用后自动开始。</p>' : ''),
+        + (recording && F.recordingSourceIssue(recording) ? `<p class="fp-hint" data-source-issue-hint>来源内容异常：${e(F.recordingSourceIssue(recording))}归位后客户信息更新会直接使用三方已同步的转写文本。</p>` : '<p class="fp-hint" data-source-ready-hint>客户信息更新将直接使用得到笔记已同步的转写文本，归位后立即开始，不需要等待。</p>'),
         values => { F.placeRecording(recordingId, values); },
         done, '确认归位',
       );
@@ -122,30 +125,34 @@
       };
     }
 
-    /** 录音详情：归位关系、每条归位的独立结果与转写原文；行为记录与客户信息分开展示。 */
+    /**
+     * 录音详情：录音内容（智能总结 / 录音原文）与归位关系并列可达，默认落在录音内容上。
+     * 内容两栏与移动端同一份渲染（F.recordingContent），归位与逐条处理结果仍是网页端独有的一段。
+     */
     function open(id) {
       const state = F.load();
       const recording = F.recording(id, state);
       if (!recording || (recording.ownerResolved === false && !['ADM', 'MGR'].includes(F.role))) { SC.toast('当前无权访问该录音', 'bad'); return; }
-      let stage = 'placements';
+      let stage = 'content';
       F.drawer(recording.title, '', (mask, close) => {
         const body = mask.querySelector('.fp-drawer-body');
         function content() {
           const current = F.load();
           const item = F.recording(id, current) || recording;
           const syncMeta = F.recordingSyncMeta[item.syncStatus] || ['已同步', 'green'];
-          const transMeta = F.transcriptMeta[item.transcriptStatus] || ['等待转写', 'brand'];
           const placements = F.recordingPlacements(id, current, true);
-          const canPlace = F.role === 'SLS' && item.owner === F.actor?.id && item.syncStatus === 'synced';
-          body.innerHTML = `<div class="fp-actions u-mb4">${F.badge(syncMeta[0], syncMeta[1])}${F.badge(transMeta[0], transMeta[1])}<span class="u-t2">${e(item.duration)} · ${e(item.date)} · ${e(item.ownerResolved === false ? '归属待处理' : F.name(item.owner))}</span></div>`
+          const canPlace = F.role === 'SLS' && item.owner === F.actor?.id && !F.recordingSourceIssue(item);
+          body.innerHTML = `<div class="fp-actions u-mb4">${F.badge(syncMeta[0], syncMeta[1])}${F.badge(item.source || '三方录音服务', 'neutral')}<span class="u-t2">${e(item.duration)} · ${e(item.date)} · ${e(item.ownerResolved === false ? '归属待处理' : F.name(item.owner))}</span></div>`
             + (item.syncStatus === 'failed' ? `<div class="fp-callout fp-callout--warn" data-sync-failure><strong>同步失败：</strong>${e(item.syncReason)}${F.role === 'ADM' || item.owner === F.actor?.id ? `<span class="fp-actions u-mt2">${F.button('重新同步', 'resync', item.id, true)}</span>` : ''}</div>` : '')
-            + F.tabs([['placements', '归位与处理结果'], ['transcript', '转写原文']], stage)
+            + F.tabs([['content', '录音内容'], ['placements', '归位与处理结果']], stage)
             + '<div class="fp-pad" data-stage></div>';
           const target = body.querySelector('[data-stage]');
-          if (stage === 'transcript') {
-            target.innerHTML = item.transcriptStatus === 'ready'
-              ? `<p class="fp-hint u-mb4">转写可用 · 最近检查 ${e(item.transcriptCheckedAt || '—')}</p><pre class="fp-transcript" data-transcript-body>${e(item.transcript || item.summary || '转写正文为空。')}</pre>`
-              : `<div class="fp-callout" data-transcript-waiting>转写尚未可用，最近检查时间 ${e(item.transcriptCheckedAt || '—')}。系统不承诺固定时长，也不会用摘要冒充原文（超时处置见 M05-2 §7.9）。${canPlace && item.transcriptStatus !== 'ready' ? `<span class="fp-actions u-mt2">${F.button('演示转写完成', 'transcribe', item.id, true)}</span>` : ''}</div>`;
+          if (stage === 'content') {
+            // 与移动端同源的两栏：默认智能总结，可切录音原文；来源异常时两栏都如实说明，不用摘要冒充原文。
+            const activeSpaces = [...new Set(placements.filter(placement => placement.status !== 'canceled').map(placement => placement.space))];
+            target.innerHTML = F.recordingContent(item)
+              + (activeSpaces.length ? `<p class="fp-hint u-mt3">已归位到 ${activeSpaces.length} 个客户空间；同一份录音各条归位互不影响。</p>` : '<p class="fp-hint u-mt3">尚未归位：归位必须锚定商机，建立后才会带来客户信息更新。</p>');
+            F.bindRecordingContent(target);
           } else {
             target.innerHTML = `<div class="fp-stack">${canPlace ? `<div class="fp-actions">${F.button('归位到客户空间', 'place', item.id, true)}<span class="u-t3">同一份录音可分别归位到多个空间，各条互不影响。</span></div>` : '<p class="fp-readonly">归位、取消归位与重新归位均由归属销售本人操作。</p>'}
               ${placements.length ? placements.map(placement => {
@@ -157,15 +164,17 @@
                 const visible = !!F.space(placement.space, current);
                 const canCancel = placement.status !== 'canceled' && F.role === 'SLS' && placement.by === F.actor?.id && space?.state === 'active';
                 const canRetry = placement.status === 'failed' && (['ADM', 'MGR'].includes(F.role) || placement.by === F.actor?.id) && space?.state === 'active';
+                // 演示入口：原型不做真实异步处理，用它把「客户信息更新中」推进到实际结果。
+                const canComplete = placement.status === 'updating' && (['ADM', 'MGR'].includes(F.role) || placement.by === F.actor?.id) && space?.state === 'active';
                 return `<article class="fp-event" data-placement-row="${e(placement.id)}" data-placement-status="${e(placement.status)}">
                   <div class="fp-actions"><strong>${e(space ? space.customer : placement.space)}</strong>${F.badge(meta[0], meta[1])}${placement.status === 'canceled' ? F.badge('留痕保留', 'neutral') : ''}</div>
                   <dl class="fp-kv"><dt>关联商机</dt><dd>${e(opp ? `${opp.name}（${opp.id}）` : placement.opportunityId || '—')}</dd><dt>归位人 / 时间</dt><dd>${e(F.name(placement.by))} · ${e(placement.at)}</dd>${placement.completedAt ? `<dt>完成时间</dt><dd>${e(placement.completedAt)}</dd>` : ''}${placement.canceledAt ? `<dt>取消时间</dt><dd>${e(placement.canceledAt)}</dd>` : ''}</dl>
-                  ${placement.status === 'waiting_transcript' ? `<p>${e(placement.failReason || '已归位，等待转写可用后自动开始客户信息更新；归位成功不等于客户信息已更新。')}</p>` : ''}
+                  ${placement.status === 'updating' ? '<p>已归位，客户信息更新中，可稍后查看；归位成功不等于客户信息已更新。处理时长不作承诺，离开页面不影响处理。</p>' : ''}
                   ${placement.status === 'failed' ? `<div class="fp-callout fp-callout--warn">${e(placement.failReason)}原录音与已有客户信息仍可查看；该异常只提醒运营，不向销售推送技术故障。</div>` : ''}
                   ${placement.status === 'nochange' ? '<p>处理完成，本次未发现客户信息变化；未发送完成提醒。</p>' : ''}
                   ${placement.status === 'canceled' ? '<p>该条归位已取消，录音本身与其他归位不受影响；取消前已生成的结果按原归位保留，不回写到其他归位。</p>' : ''}
                   <div class="fp-actions u-mt2" data-behavior-status="${e(behavior ? behavior.status : 'none')}">${behavior ? F.badge('行为记录 · ' + behaviorMeta[0], behaviorMeta[1]) : F.badge('行为记录 · 未生成', 'neutral')}${behavior && behavior.status === 'failed' ? `<small>${e(behavior.failReason)}</small>` : ''}</div>
-                  <div class="fp-actions u-mt2">${placement.changeId && visible ? `<a class="btn" href="${F.link('followup-workbench', { space: placement.space, tab: 'overview', change: placement.changeId })}">查看本次变化</a>` : ''}${visible ? `<a class="btn" href="${F.link('followup-workbench', { space: placement.space, tab: 'followup', sub: 'recordings' })}">进入客户空间</a>` : '<span class="u-t3">该空间不在当前可见范围。</span>'}${canRetry ? F.button('重试更新', 'retry-update', placement.id) : ''}${canCancel ? F.button('取消归位', 'cancel', placement.id) : ''}</div>
+                  <div class="fp-actions u-mt2">${placement.changeId && visible ? `<a class="btn" href="${F.link('followup-workbench', { space: placement.space, tab: 'overview', change: placement.changeId })}">查看本次变化</a>` : ''}${visible ? `<a class="btn" href="${F.link('followup-workbench', { space: placement.space, tab: 'followup', sub: 'recordings' })}">进入客户空间</a>` : '<span class="u-t3">该空间不在当前可见范围。</span>'}${canComplete ? F.button('演示：完成本次更新', 'complete-update', placement.id) : ''}${canRetry ? F.button('重试更新', 'retry-update', placement.id) : ''}${canCancel ? F.button('取消归位', 'cancel', placement.id) : ''}</div>
                 </article>`;
               }).join('') : '<div class="fp-callout" data-placement-empty>该录音尚未归位。选择客户空间与商机后建立第一条归位；归位必须锚定商机。</div>'}
             </div>`;
@@ -176,8 +185,8 @@
           place: recordingId => openPlaceForm(recordingId, () => { content(); draw(); }),
           cancel: placementId => { try { F.cancelPlacement(placementId); content(); draw(); SC.toast('已取消该条归位，录音与其他归位不受影响。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } },
           'retry-update': placementId => { try { F.retryPlacementUpdate(placementId); content(); draw(); SC.toast('已重试该条归位的客户信息更新。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } },
-          resync: recordingId => { try { F.retryRecordingSync(recordingId); content(); draw(); SC.toast('已重新同步；转写可用后可继续归位。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } },
-          transcribe: recordingId => { try { F.markTranscriptReady(recordingId); content(); draw(); SC.toast('转写已可用，等待中的归位开始更新客户信息。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } }
+          resync: recordingId => { try { F.retryRecordingSync(recordingId); content(); draw(); SC.toast('已重新同步，并取回三方已完成的转写文本；现在可以归位。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } },
+          'complete-update': placementId => { try { F.completePlacementUpdate(placementId); content(); draw(); SC.toast('本次客户信息更新已完成。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } }
         });
         content();
       });
@@ -187,7 +196,7 @@
     root.addEventListener('click', event => { if (event.target.closest('a[data-action=open]')) event.preventDefault(); });
     F.bind(root, {
       open,
-      resync: id => { try { F.retryRecordingSync(id); draw(); SC.toast('已重新同步；转写可用后可继续归位。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } }
+      resync: id => { try { F.retryRecordingSync(id); draw(); SC.toast('已重新同步，并取回三方已完成的转写文本；现在可以归位。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } }
     });
     draw();
     if (SC.param('meeting')) open(SC.param('meeting'));

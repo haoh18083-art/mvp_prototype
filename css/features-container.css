@@ -16,6 +16,33 @@
   .fp-data-table td.is-primary > a { display: inline-flex; align-items: center; }
   .fp-data-table td.is-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }
   .fp-data-table td.is-action .fp-table-cell-label { margin: 0; }
+  /* 操作列文字动作：容器保持一行排列（「操作」标签在左、动作在右），动作本身撑到 44px 触控行高。 */
+  .fp-data-table td.is-action .fp-row-actions { gap: 0 18px; }
+  .fp-data-table td.is-action .fp-link-action { min-height: 44px; }
+  .fp-data-table tr.is-empty { display: block; padding: 0; }
+  .fp-data-table tr.is-empty td { display: block; }
+  .fp-data-table tr.is-empty .fp-table-cell-label { display: none; }
+  .fp-table-footer { padding-inline: 16px; }
+}
+
+/* 通用窄屏表格：面板实际宽度不足 720px 时改为卡片式信息行，避免横向挤压数据。 */
+@container fp-data-table (max-width: 720px) {
+  .fp-data-table-wrap { overflow: visible; }
+  .fp-data-table, .fp-data-table tbody { display: block; width: 100%; min-width: 0; white-space: normal; }
+  .fp-data-table thead { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .fp-data-table thead tr { display: block; width: 1px; height: 1px; overflow: hidden; }
+  .fp-data-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px 16px; border-bottom: 1px solid var(--gray-100); }
+  .fp-data-table--single tbody tr { grid-template-columns: minmax(0, 1fr); }
+  .fp-data-table tbody tr:last-child { border-bottom: 0; }
+  .fp-data-table td, .fp-data-table--wide td:first-child, .fp-data-table--wide td:last-child { position: static; display: block; width: auto; min-width: 0; max-width: none; padding: 0; border: 0; box-shadow: none; background: transparent; text-align: left; white-space: normal; }
+  .fp-data-table td.is-primary, .fp-data-table td.is-date, .fp-data-table td.is-status, .fp-data-table td.is-number, .fp-data-table td.is-action, .fp-data-table td.is-long { width: auto; min-width: 0; max-width: none; white-space: normal; }
+  .fp-data-table .fp-table-cell-label { display: block; margin-bottom: 4px; color: var(--text-3); font-size: 10px; font-weight: 600; line-height: 1.4; }
+  .fp-data-table td.is-primary, .fp-data-table td.is-long, .fp-data-table td.is-action { grid-column: 1 / -1; }
+  .fp-data-table td.is-primary { padding-bottom: 2px; }
+  .fp-data-table td.is-primary > a, .fp-data-table td.is-action > a, .fp-data-table td.is-action > .btn { min-height: 44px; }
+  .fp-data-table td.is-primary > a { display: inline-flex; align-items: center; }
+  .fp-data-table td.is-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }
+  .fp-data-table td.is-action .fp-table-cell-label { margin: 0; }
   .fp-data-table tr.is-empty { display: block; padding: 0; }
   .fp-data-table tr.is-empty td { display: block; }
   .fp-data-table tr.is-empty .fp-table-cell-label { display: none; }
@@ -55,3 +82,37 @@
   .fp-directory-search { grid-column: 1 / -1; }
   .fp-directory-actions { justify-content: flex-end; }
 }
+
+/* R01 人员对应表：窄屏不做卡片堆叠，保持表格结构 + 横向滚动，首末列吸边保证「人员」与「操作」始终可见。
+   放在通用窄屏规则之后：同为 !important 时后出现的规则胜出。 */
+@container fp-data-table (max-width: 720px) {
+  /* overflow-x 带 !important：通用窄屏规则把滚动区改成 visible，否则这张表只剩页面级横向滚动。 */
+  .fp-map-table-wrap { overflow-x: auto !important; }
+  .fp-map-table { display: table !important; width: 100% !important; min-width: var(--fp-table-min) !important; white-space: normal !important; }
+  .fp-map-table tbody { display: table-row-group !important; }
+  .fp-map-table thead { position: static !important; width: auto !important; height: auto !important; margin: 0 !important; overflow: visible !important; clip: auto !important; }
+  .fp-map-table thead tr { display: table-row !important; width: auto !important; height: auto !important; overflow: visible !important; }
+  .fp-map-table tbody tr { display: table-row !important; padding: 0 !important; border-bottom: 0 !important; }
+  .fp-map-table td, .fp-map-table td.is-primary, .fp-map-table td.is-action, .fp-map-table td.is-status {
+    display: table-cell !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 10px 12px !important;
+    white-space: normal !important;
+    text-align: left !important;
+    box-shadow: none !important;
+    background: var(--bg-surface);
+  }
+  .fp-map-table td.is-number { text-align: right !important; }
+  .fp-map-table td.is-action { width: 1% !important; }
+  .fp-map-table .fp-table-cell-label { display: none !important; }
+  .fp-map-table-wrap th.is-primary, .fp-map-table-wrap td.is-primary { position: sticky !important; left: 0 !important; z-index: 2 !important; }
+  .fp-map-table-wrap th.is-action, .fp-map-table-wrap td.is-action { position: sticky !important; right: 0 !important; z-index: 2 !important; }
+  .fp-map-table-wrap tr[data-status="pending"] td.is-primary, .fp-map-table-wrap tr[data-status="pending"] td.is-action { background: var(--amber-50); }
+  .fp-map-table-wrap tr.is-expanded td.is-primary, .fp-map-table-wrap tr.is-expanded td.is-action { background: var(--brand-50); }
+  .fp-map-detail-box { padding: 12px 14px 14px; }
+  .fp-map-table tbody tr.is-empty { display: table-row !important; }
+  .fp-map-table tbody tr.is-empty td { display: table-cell !important; }
+}
+

@@ -1,4 +1,4 @@
-/* 全局设计变量：颜色、字号、间距、圆角、动效。各端样式都引用这里，避免写死色值。 */
+/* 全局设计变量：颜色、字号、字重、行高、间距、圆角、动效、控件尺寸。各端样式只引用这里，不写死数值。 */
 :root {
   --bg: #fafafa;
   --surface: #ffffff;
@@ -6,9 +6,10 @@
   --fg: #111111;
   --fg-2: var(--fg);
   --muted: #6b6b6b;
+  --muted-2: #9a9a9a;
   --meta: var(--muted);
   --border: #e5e5e5;
-  --border-soft: var(--border);
+  --border-soft: #efefef;
   --accent: #2f6feb;
   --accent-on: #ffffff;
   --accent-hover: color-mix(in oklab, var(--accent), black 8%);
@@ -19,6 +20,9 @@
   --font-display: "Microsoft YaHei", "PingFang SC", -apple-system, system-ui, sans-serif;
   --font-body: "Microsoft YaHei", "PingFang SC", -apple-system, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", monospace;
+  /* 字号阶梯：10 mono 小标签 / 11 辅助 / 12 警示与角标 / 14 标题与正文 / 16 区块标题 / 20 数值 / 24 页标题 */
+  --text-3xs: 10px;
+  --text-2xs: 11px;
   --text-xs: 12px;
   --text-sm: 14px;
   --text-base: 16px;
@@ -27,32 +31,73 @@
   --text-2xl: 32px;
   --text-3xl: 48px;
   --text-4xl: 64px;
-  --leading-body: 1.5;
+  --weight-body: 400;
+  --weight-medium: 500;
+  --weight-strong: 600;
+  --weight-title: 650;
+  --weight-display: 700;
   --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-body: 1.5;
+  --leading-relaxed: 1.65;
   --tracking-display: -0.01em;
+  --tracking-tight: -0.02em;
+  --tracking-mono: 0.06em;
+  --space-05: 2px;
   --space-1: 4px;
+  --space-15: 6px;
   --space-2: 8px;
+  --space-25: 10px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
+  --space-10: 40px;
+  --space-11: 44px;
   --space-12: 48px;
   --space-20: 80px;
   --section-y-desktop: 80px;
   --section-y-tablet: 48px;
   --section-y-phone: 32px;
+  --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-pill: 9999px;
   --elev-flat: none;
   --elev-ring: 0 0 0 1px var(--border);
   --elev-raised: 0 2px 8px color-mix(in oklab, var(--fg), transparent 92%);
+  --elev-accent: 0 8px 20px color-mix(in oklab, var(--accent), transparent 70%);
   --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%);
   --motion-fast: 150ms;
   --motion-base: 200ms;
+  --motion-slow: 280ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  /* 路由转场：旧页让位距离（相对手机框宽度，iOS 推入 / 弹出式滑动） */
+  --motion-view-offset: 30%;
+  /* 控件与图标尺寸 */
+  --icon-xs: 16px;
+  --icon-sm: 18px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+  --icon-xl: 40px;
+  --icon-stroke: 1.8;
+  --tap-min: 44px;
+  --control-h: 36px;
+  --control-h-lg: 40px;
+  --tab-h: 36px;
+  --row-min-h: 56px;
+  --avatar-size: 32px;
+  --avatar-radius: 10px;
+  --gutter: 16px;
+  --phone-w: 430px;
+  --status-h: 44px;
+  /* 顶栏只放一行页标题（今日为日期、其余入口为入口名），高度按标题 + 上下留白给足即可 */
+  --topbar-h: 52px;
+  --bottom-nav-h: 70px;
   --container-max: 1200px;
   --container-gutter-desktop: 24px;
   --container-gutter-tablet: 16px;
@@ -62,5 +107,6 @@
   --soft-green: color-mix(in oklab, var(--success), var(--surface) 92%);
   --soft-yellow: color-mix(in oklab, var(--warn), var(--surface) 90%);
   --soft-red: color-mix(in oklab, var(--danger), var(--surface) 92%);
+  --scrim: color-mix(in oklab, var(--fg), transparent 55%);
   --navy: color-mix(in oklab, var(--fg), var(--accent) 15%);
 }

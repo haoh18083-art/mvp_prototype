@@ -16,7 +16,7 @@
     'platform-data': ['平台数据', '查看客户匹配批次、方案生产与分发情况。', 'layers', 'MGR'],
     'message-center': ['消息中心', '归属、空间、方案与运营异常提醒统一入箱，按当前权限直达来源。', 'inbox', 'SLS'],
     'sales-assistant': ['销售助手', '结合本人客户与跟进上下文，整理沟通重点和下一步行动。', 'chat', 'SLS'],
-    'solution-workbench': ['方案人员工作台', '按承接客户组织方案工作，进入空间查看全景、补资料并衔接推送与反馈。', 'layers', 'SOL'],
+    'solution-workbench': ['方案人员工作台', '按承接客户组织方案工作，进入空间查看全景并补充资料。', 'layers', 'SOL'],
     'solution-push': ['方案推送', '向授权且正常的客户空间定向推送正文、附件和外部链接。', 'send', 'SOL'],
     'solution-feedback': ['反馈看板', '追踪本人方案的已读、回复、撤回和手动催办状态。', 'clock', 'SOL'],
     'solution-center': ['方案协同台', '在承接客户池内定向推送方案，跟踪销售已读与回复。', 'layers', 'SOL'],

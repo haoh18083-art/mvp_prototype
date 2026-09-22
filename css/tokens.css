@@ -55,18 +55,21 @@
   --gray-900: #17202a;
 
   /* ---------- 语义别名 ---------- */
-  --bg-app:        var(--gray-50);
+  /* 承接调度台：工作面用白，页底略沉，构成条用更浅的上下文底，避免再堆一张白卡片。 */
+  --bg-app:        #f3f5f7;
   --bg-surface:    var(--gray-0);
   --bg-subtle:     var(--gray-25);
   --bg-muted:      var(--gray-100);
+  --bg-context:    #eef1f4;
   --border:        var(--gray-200);
   --border-strong: var(--gray-300);
-  --text-1:        var(--gray-900);
+  --text-1:        #1c2430;
   --text-2:        var(--gray-600);
   --text-3:        var(--gray-500);
   --text-invert:   var(--gray-0);
   --accent:        var(--brand-600);
   --accent-hover:  var(--brand-700);
+  --accent-soft:   #e8f0f6;
   --focus-ring:    0 0 0 3px var(--brand-100);
 
   /* ---------- 侧栏（深色轨） ---------- */
@@ -129,6 +132,7 @@
   --sh-sm: 0 1px 3px rgba(23, 32, 42, .07), 0 1px 2px rgba(23, 32, 42, .04);
   --sh-md: 0 4px 12px rgba(23, 32, 42, .08), 0 1px 3px rgba(23, 32, 42, .05);
   --sh-lg: 0 12px 32px rgba(23, 32, 42, .13), 0 2px 8px rgba(23, 32, 42, .06);
+  --sh-work: 0 1px 2px rgba(28, 36, 48, .06);
 
   /* ---------- 结构尺寸 ---------- */
   --nav-w:      232px;
@@ -142,6 +146,7 @@
   /* ---------- 过渡 ---------- */
   --t-fast: 120ms cubic-bezier(.4, 0, .2, 1);
   --t-base: 180ms cubic-bezier(.4, 0, .2, 1);
+  --pulse-update: 2.4s ease-out infinite;
 
   --z-dropdown: 100;
   --z-sticky:   200;

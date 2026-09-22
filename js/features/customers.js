@@ -8,27 +8,53 @@
     const pools = snapshot.pools;
     // R05 统一入口：先说明当前身份能读什么、能写什么；失权时给出拒绝结果与重新进入入口。
     const permission = F.permissionContext(snapshot);
+    // R05 统一入口：面板头给身份与判定结果，一行给可读 / 可写范围；失权时给出拒绝结果与重新进入入口。
     const permissionPanel = permission.valid
-      ? `<section class="fp-panel fp-pad fp-permission" data-permission="granted">
-          <div class="fp-actions"><strong>当前权限结果</strong>${F.badge(permission.roleLabel, 'brand')}${F.badge('账号启用中', 'green')}<span class="u-t3">${e(permission.actor.name)} · ${e(permission.actor.id)}</span></div>
-          <dl class="fp-kv u-mt2"><dt>可读范围</dt><dd data-permission-read>${e(permission.read)}</dd><dt>可写范围</dt><dd data-permission-write>${e(permission.write)}</dd>${F.role === 'SOL' ? `<dt>承接客户池</dt><dd>${permission.pools.length ? permission.pools.map(pool => F.badge(pool, 'brand')).join(' ') : F.badge('未配置，无空间可进', 'amber')}</dd>` : ''}<dt>本次判定结果</dt><dd>可见 ${permission.spaceCount} 个空间，其中 ${permission.frozenCount} 个已冻结只读</dd></dl>
-          <p class="fp-hint">无权空间不会出现在列表中，也不会提示其是否存在；写入在提交时再次校验。</p>
+      ? `<section class="fp-panel fp-permission" data-permission="granted">
+          <header class="fp-panel-head fp-permission-head">
+            <div><h2>当前权限结果</h2><p class="fp-hint">可见 ${permission.spaceCount} 个空间，其中 ${permission.frozenCount} 个已冻结只读；无权空间不会出现，也不提示是否存在。</p></div>
+            <div class="fp-actions">${F.badge(permission.roleLabel, 'brand')}${F.badge('账号启用中', 'green')}<span class="u-t3">${e(permission.actor.name)} · ${e(permission.actor.id)}</span></div>
+          </header>
+          <div class="fp-permission-scope">
+            <span class="fp-permission-term">可读</span><span data-permission-read>${e(permission.read)}</span>
+            <span class="fp-permission-term">可写</span><span data-permission-write>${e(permission.write)}</span>
+            ${F.role === 'SOL' ? `<span class="fp-permission-term">承接客户池</span><span>${permission.pools.length ? permission.pools.map(pool => F.badge(pool, 'brand')).join(' ') : F.badge('未配置，无空间可进', 'amber')}</span>` : ''}
+          </div>
         </section>`
       : `<section class="fp-panel fp-pad fp-permission fp-callout--warn" data-permission="denied">
           <div class="fp-actions"><strong>访问被拒绝</strong>${F.badge('二次校验未通过', 'amber')}</div>
           <p class="u-mt2">${e(permission.reason || '当前会话权限已失效')}。本次读取不返回任何空间内容，也不提示空间是否存在。</p>
           <p class="fp-actions u-mt2"><a class="btn btn--primary" href="${F.link('customer-spaces')}">重新进入</a></p>
         </section>`;
-    root.innerHTML = permissionPanel + F.metrics([['客户', new Set(spaces.map(w => w.customerId)).size, '按当前角色可见范围'], ['跟进空间', spaces.length, '销售 × 客户 × 客户池'], ['进行中', spaces.filter(w => w.state === 'active').length, '确权有效'], ['已冻结', spaces.filter(w => w.state === 'frozen').length, '历史内容保留只读'], ['内容更新中', spaces.filter(w => ['preparing', 'updating'].includes(w.readiness)).length, '上一版内容继续可读'], ['内容失败', spaces.filter(w => w.readiness === 'failed').length, '可查看原因并重试']]) + `
+    /**
+     * 顶部指标：客户与空间数是规模口径，其余四张是可筛选口径，点击即把列表收敛到该状态，再次点击还原。
+     * 指标与筛选器共用同一份过滤条件，避免出现「卡片数字和列表对不上」。
+     */
+    const readable = spaces.filter(w => w.readiness !== 'failed' && !['preparing', 'updating'].includes(w.readiness)).length;
+    const metricCard = (label, value, detail, filter) => filter
+      ? `<button type="button" class="fp-metric fp-metric--action" data-metric-filter="${e(filter[0])}" data-metric-value="${e(filter[1])}" aria-pressed="false"><span>${e(label)}</span><strong>${e(value)}</strong><small>${e(detail)}</small></button>`
+      : `<div class="fp-metric"><span>${e(label)}</span><strong>${e(value)}</strong><small>${e(detail)}</small></div>`;
+    const metricsBlock = `<div class="fp-metrics fp-space-metrics" data-space-metrics>
+      ${metricCard('客户', new Set(spaces.map(w => w.customerId)).size, '按当前角色可见范围')}
+      ${metricCard('跟进空间', spaces.length, '销售 × 客户 × 客户池')}
+      ${metricCard('进行中', spaces.filter(w => w.state === 'active').length, `确权有效 · ${readable} 个内容可读`, ['status', 'active'])}
+      ${metricCard('已冻结', spaces.filter(w => w.state === 'frozen').length, '历史内容保留只读', ['status', 'frozen'])}
+      ${metricCard('内容更新中', spaces.filter(w => ['preparing', 'updating'].includes(w.readiness)).length, '上一版内容继续可读', ['readiness', 'updating'])}
+      ${metricCard('内容失败', spaces.filter(w => w.readiness === 'failed').length, '可查看原因并重试', ['readiness', 'failed'])}
+    </div>`;
+    root.innerHTML = permissionPanel + metricsBlock + `
       <section class="fp-panel fp-directory fp-directory-panel">
         <header class="fp-panel-head fp-directory-head">
           <div class="fp-directory-heading">
             <h2 id="customer-space-list-title">客户空间</h2>
             <span class="fp-directory-count" data-result-count aria-live="polite" aria-atomic="true"></span>
           </div>
-          <span class="fp-directory-sync"><span aria-hidden="true"></span>CRM 已同步 · ${e(snapshot.crm?.lastSyncAt || '暂无')}</span>
+          <div class="fp-directory-head-actions">
+            <button type="button" class="fp-directory-filter-toggle" data-filter-toggle aria-expanded="true" aria-controls="customer-space-filter">筛选条件</button>
+            <span class="fp-directory-sync"><span aria-hidden="true"></span>CRM 已同步 · ${e(snapshot.crm?.lastSyncAt || '暂无')}</span>
+          </div>
         </header>
-        <form class="fp-directory-filter" data-search aria-label="客户空间筛选">
+        <form class="fp-directory-filter" id="customer-space-filter" data-search aria-label="客户空间筛选">
           <div class="fp-directory-search">
             <label class="fp-sr-only" for="customer-space-search">搜索客户名称或空间编号</label>
             ${SC.icon('search', 16)}
@@ -50,6 +76,15 @@
               <option value="frozen">已冻结</option>
             </select>
           </label>
+          <label class="fp-directory-select">
+            <span class="fp-sr-only">内容就绪度</span>
+            <select name="readiness" aria-label="内容就绪度">
+              <option value="">全部内容状态</option>
+              <option value="ready">内容已就绪</option>
+              <option value="updating">内容更新中</option>
+              <option value="failed">内容更新失败</option>
+            </select>
+          </label>
           <div class="fp-directory-actions">
             <button class="btn fp-directory-reset" type="reset" disabled>${SC.icon('close', 14)}清除筛选</button>
           </div>
@@ -69,16 +104,36 @@
     const chips = root.querySelector('[data-filter-chips]');
     const summary = root.querySelector('[data-filter-summary]');
     const resultCount = root.querySelector('[data-result-count]');
-    let activeFilters = { q: '', pool: '', status: '' };
+    let activeFilters = { q: '', pool: '', status: '', readiness: '' };
+    // 演示数据 9 个空间，按 5 条一页正好两页：分页行为在原型里可验收，而不是永远只有一页。
+    const PAGE_SIZE = 5;
+    let currentPage = 1;
     let searchTimer;
     let composing = false;
+    const toggle = root.querySelector('[data-filter-toggle]');
+    // jsdom 无 matchMedia：取不到就按桌面处理（筛选常驻），窄屏才默认收起。
+    const isNarrow = () => !!window.matchMedia?.('(max-width: 760px)').matches;
+    let filtersOpen = !isNarrow();
 
     const normalize = value => String(value || '').trim().toLocaleLowerCase('zh-CN');
     const readFilters = () => {
       const values = Object.fromEntries(new FormData(form));
-      return { q: String(values.q || '').trim(), pool: String(values.pool || ''), status: String(values.status || '') };
+      return { q: String(values.q || '').trim(), pool: String(values.pool || ''), status: String(values.status || ''), readiness: String(values.readiness || '') };
     };
-    const hasFilters = filters => !!(filters.q || filters.pool || filters.status);
+    const hasFilters = filters => !!(filters.q || filters.pool || filters.status || filters.readiness);
+    /** 内容就绪度的三态归并：与列表徽章口径一致（失败 / 更新中 / 其余视为就绪）。 */
+    const readinessOf = space => space.readiness === 'failed' ? 'failed' : ['preparing', 'updating'].includes(space.readiness) ? 'updating' : 'ready';
+
+    /** 分页条：与人员管理列表同一套交互语言（第 x / y 页 + 上一页 / 下一页）。 */
+    function pagination(total, pageCount) {
+      return `<nav class="fp-pagination" aria-label="客户空间列表分页">
+        <span>第 ${currentPage} / ${pageCount} 页 · 共 ${total} 个空间</span>
+        <div class="fp-actions">
+          <button type="button" class="btn" data-action="space-page" data-value="prev" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>
+          <button type="button" class="btn" data-action="space-page" data-value="next" ${currentPage >= pageCount ? 'disabled' : ''}>下一页</button>
+        </div>
+      </nav>`;
+    }
 
     /** 统一状态点和文案，避免仅依赖颜色表达空间状态。 */
     function spaceStatus(space) {
@@ -134,34 +189,66 @@
     /** 同步结果数、筛选标签和清除按钮状态，使筛选结果始终可感知。 */
     function syncFilterState(rows) {
       const statusLabel = activeFilters.status === 'active' ? '进行中' : activeFilters.status === 'frozen' ? '已冻结' : '';
+      const readinessLabel = { ready: '内容已就绪', updating: '内容更新中', failed: '内容更新失败' }[activeFilters.readiness] || '';
       const items = [
         activeFilters.q && ['q', `关键词：${activeFilters.q}`],
         activeFilters.pool && ['pool', `客户池：${activeFilters.pool}`],
-        statusLabel && ['status', `状态：${statusLabel}`]
+        statusLabel && ['status', `状态：${statusLabel}`],
+        readinessLabel && ['readiness', `内容：${readinessLabel}`]
       ].filter(Boolean);
+      syncMetricState();
+      syncFilterToggle();
       chips.innerHTML = items.map(([name, label]) => `<button type="button" class="fp-filter-chip" data-remove-filter="${name}" aria-label="移除筛选条件：${e(label)}" title="${e(label)}"><span>${e(label)}</span>${SC.icon('close', 12)}</button>`).join('');
       feedback.hidden = items.length === 0;
       summary.textContent = items.length ? `已筛选 ${rows.length} / ${spaces.length}` : '';
-      resultCount.textContent = `${rows.length} 个空间`;
+      const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      resultCount.textContent = pageCount > 1 ? `${rows.length} 个空间 · 第 ${Math.min(currentPage, pageCount)} / ${pageCount} 页` : `${rows.length} 个空间`;
       reset.disabled = items.length === 0;
       clearSearch.hidden = !search.value.trim();
     }
 
     function draw(nextFilters = activeFilters) {
-      activeFilters = { q: String(nextFilters.q || '').trim(), pool: String(nextFilters.pool || ''), status: String(nextFilters.status || '') };
+      activeFilters = { q: String(nextFilters.q || '').trim(), pool: String(nextFilters.pool || ''), status: String(nextFilters.status || ''), readiness: String(nextFilters.readiness || '') };
       const keyword = normalize(activeFilters.q);
       const rows = spaces.filter(space => {
         const searchable = normalize(`${space.customer} ${space.id}`);
-        return (!keyword || searchable.includes(keyword)) && (!activeFilters.pool || space.pool === activeFilters.pool) && (!activeFilters.status || space.state === activeFilters.status);
+        return (!keyword || searchable.includes(keyword))
+          && (!activeFilters.pool || space.pool === activeFilters.pool)
+          && (!activeFilters.status || space.state === activeFilters.status)
+          && (!activeFilters.readiness || readinessOf(space) === activeFilters.readiness);
       });
-      root.querySelector('[data-results]').innerHTML = renderTable(rows);
+      const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      currentPage = Math.min(Math.max(1, currentPage), pageCount);
+      const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+      root.querySelector('[data-results]').innerHTML = renderTable(pageRows) + (rows.length ? pagination(rows.length, pageCount) : '');
       syncFilterState(rows);
+    }
+
+    /** 筛选区开合：窄屏默认收起，一旦有生效条件就自动展开，保证条件下可见可撤。 */
+    function syncFilterToggle() {
+      const open = filtersOpen || hasFilters(activeFilters);
+      form.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.textContent = open ? '收起筛选' : '筛选条件';
+      const count = [activeFilters.q, activeFilters.pool, activeFilters.status, activeFilters.readiness].filter(Boolean).length;
+      toggle.classList.toggle('is-active', count > 0);
+      toggle.dataset.filterCount = count ? String(count) : '';
+    }
+
+    /** 指标卡与筛选器双向同步：卡片按下态只反映当前生效的筛选条件。 */
+    function syncMetricState() {
+      root.querySelectorAll('[data-metric-filter]').forEach(card => {
+        const active = activeFilters[card.dataset.metricFilter] === card.dataset.metricValue;
+        card.classList.toggle('is-active', active);
+        card.setAttribute('aria-pressed', String(active));
+      });
     }
 
     const applyFilters = () => {
       clearTimeout(searchTimer);
       const filters = readFilters();
       search.value = filters.q;
+      currentPage = 1;
       draw(filters);
     };
     const scheduleSearch = () => {
@@ -178,6 +265,7 @@
       form.querySelectorAll('input').forEach(field => { field.value = ''; });
       form.querySelectorAll('select').forEach(field => { field.selectedIndex = 0; });
       draw({});
+      SC.toast('已清除全部筛选条件。', 'ok');
       search.focus();
     });
     search.addEventListener('input', event => {
@@ -192,6 +280,15 @@
       if (event.key === 'Escape' && search.value) { event.preventDefault(); search.value = ''; applyFilters(); }
     });
     clearSearch.addEventListener('click', () => { composing = false; search.value = ''; applyFilters(); search.focus(); });
+    toggle.addEventListener('click', () => { filtersOpen = !filtersOpen; syncFilterToggle(); if (!form.hidden) search.focus(); });
+    // 翻页只改页码并重画列表：筛选条件与指标卡选中态保持不动。
+    root.addEventListener('click', event => {
+      const trigger = event.target.closest('[data-action="space-page"]');
+      if (!trigger || trigger.disabled) return;
+      currentPage += trigger.dataset.value === 'next' ? 1 : -1;
+      draw(activeFilters);
+      root.querySelector('[data-results]')?.scrollIntoView?.({ block: 'nearest' });
+    });
     chips.addEventListener('click', event => {
       const chip = event.target.closest('[data-remove-filter]');
       if (!chip) return;
@@ -200,14 +297,34 @@
       if (chip.dataset.removeFilter === 'q') search.focus();
     });
 
+    // 指标卡点击即筛选：同一张卡再次点击取消该条件，表单与筛选标签同步刷新。
+    root.querySelector('[data-space-metrics]')?.addEventListener('click', event => {
+      const card = event.target.closest('[data-metric-filter]');
+      if (!card) return;
+      const name = card.dataset.metricFilter;
+      const value = card.dataset.metricValue;
+      const next = { ...readFilters(), [name]: activeFilters[name] === value ? '' : value };
+      if (form.elements[name]) form.elements[name].value = next[name];
+      draw(next);
+      // 窄屏筛选区展开后会占满一屏，筛选结果必须滚进视野，否则点了卡片看不到变化。
+      root.querySelector('[data-results]')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      if (next[name]) SC.toast(`已筛选：${card.querySelector('span').textContent.trim()} ${card.querySelector('strong').textContent.trim()} 个空间。`, 'ok');
+    });
+
     draw();
   };
 
   /**
    * 客户空间次级页（五入口）：概览为默认入口，客户、商机、跟进、资料为明细入口。
+   * 0921 版面（与移动端口径对齐）：吸顶 chrome 承载状态角标、写入口与更新铃铛（红点=有新结果可看，打开更新抽屉即已读）；
+   * 概览为 指标条 → 一句话判断 → 经营焦点 → 客户事实 → 低频板块折叠 的固定次序，常显区不放更新内容；
+   * 更新历史收进更新抽屉（与跟进 Tab 同源、倒序全量、不另建独立历史）；空间助手为悬浮入口 + 抽屉，五个 Tab 均可唤出；
+   * 右侧栏只留「下一步任务 / 客户档案」两个未在别处承载的内容，不再重复展示空间动态。
    * 页面契约（回归测试依赖）：data-tab 五入口、data-subtab 跟进子页签（跟进记录/行为记录/方案往来/录音）、data-overview-panel 十板块、
-   * data-change-latest / data-update-hint 本次变化、data-space-lifecycle / data-space-readiness 双状态轴、
-   * data-scope-layer 六层装载状态、data-co-followers 同跟名单、data-qa-* 空间助手问答、data-behavior-* 行为记录。
+   * data-overview-metrics 指标条、data-open-updates / data-updates-status / data-update-history / data-history-node 更新流、
+   * data-change-latest 更新抽屉内最近一次变化、data-space-lifecycle / data-space-readiness 双状态轴、
+   * data-scope-layer 六层装载状态、data-co-followers 同跟名单、data-behavior-* 行为记录、
+    * data-open-assistant 悬浮入口、data-space-qa / data-qa-welcome / data-qa-item / data-qa-user / data-qa-field / data-qa-send / data-qa-note / data-qa-cite / data-qa-frozen 空间助手对话。
    */
   F.views['followup-workbench'] = function (root) {
     let spaceId = SC.param('space') || F.visible()[0]?.id;
@@ -233,8 +350,25 @@
       const events = Array.isArray(space.lifecycleEvents) ? space.lifecycleEvents : [];
       F.drawer('空间生命周期 · ' + space.id, `<div class="fp-stack"><div class="fp-callout">生命周期回答“空间是否还能新增工作”；内容就绪度回答“当前内容是否已准备好”。两条状态独立记录。</div><div class="fp-timeline" data-space-history>${events.map(event => `<article class="fp-event" data-space-event="${e(event.type)}"><div class="fp-actions"><strong>${e({ created: '空间建立', frozen: '空间冻结', unfrozen: '空间解冻', opportunity_removed: '商机确权移除', entitlement_added: '确权补建', content_retry: '内容重试' }[event.type] || event.type)}</strong>${F.badge(event.result === 'success' || event.result === 'kept_active' ? '已完成' : '处理中', event.result === 'success' || event.result === 'kept_active' ? 'green' : 'amber')}</div><p>${e(event.reason || '状态发生变化')}</p><small>${e(event.at || '')}${event.batchId ? ` · ${e(event.batchId)}` : ''}</small></article>`).join('') || '<p class="u-t3">暂无生命周期事件。</p>'}</div></div>`);
     }
-    /** 结论或变化点回原文；来源失效时保留标识并说明不可用原因，不伪装成已验证事实。 */
+
+    /**
+     * 录音内容抽屉：空间侧所有指向录音的入口（录音区、变化依据、行为记录依据、更新历史节点）
+     * 统一落到这里，展示与移动端相同的「智能总结 / 录音原文」两栏，不再只给一段原文。
+     */
+    function openRecording(recordingId) {
+      const recording = F.recording(recordingId);
+      if (!recording) { SC.toast('该录音已不在当前可见范围。', 'bad'); return; }
+      const syncMeta = F.recordingSyncMeta[recording.syncStatus] || ['已同步', 'green'];
+      const placements = F.spacePlacements(spaceId).filter(item => item.recording === recording.id);
+      const head = `<div class="fp-actions">${F.badge(syncMeta[0], syncMeta[1])}${F.badge(recording.source || '三方录音服务', 'neutral')}<span class="u-t3">${e(recording.duration)} · ${e(recording.date)} · ${e(recording.ownerResolved === false ? '归属待处理' : F.name(recording.owner))}</span></div>`;
+      const foot = `<dl class="fp-kv"><dt>录音编号</dt><dd>${e(recording.id)}</dd><dt>同步来源</dt><dd>${e(recording.source || '三方录音服务')}</dd><dt>本空间归位</dt><dd>${placements.length ? e(placements.map(item => F.placementStatusMeta[item.status]?.[0] || '处理中').join(' · ')) : '尚未归位'}</dd></dl><p class="fp-hint">智能总结与录音原文都由得到笔记（三方录音服务）同步提供，三方已完成转写；客户事实更新另见本次变化与行为记录。</p>`;
+      F.drawer(recording.title, `<div class="fp-stack" data-recording-drawer="${e(recording.id)}">${head}${F.recordingContent(recording)}${foot}</div>`, mask => F.bindRecordingContent(mask));
+    }
+
+    /** 结论或变化点回原文；录音来源走录音内容两栏，其余来源保留原文抽屉。 */
     function openSource(ref) {
+      const type = String(ref).split(':')[0];
+      if (type === 'meeting') { openRecording(String(ref).split(':')[1]); return; }
       const record = F.sourceRecord(ref);
       if (!record) { SC.toast('该来源已不在当前可见范围。', 'bad'); return; }
       const body = record.available
@@ -294,40 +428,328 @@
       return `<article class="fp-change" data-space-change="${e(change.status)}"><div class="fp-actions"><strong>${e(change.sourceLabel)}</strong>${F.badge(label, tone)}<span class="u-t3">${e(change.at)}</span></div>${body}<small class="fp-sub">起始版本 ${e(change.baseVersion || '—')}${change.resultVersion ? ` → ${e(change.resultVersion)}` : ''}</small></article>`;
     }
 
-    /** 概览为默认入口：AI 一句话判断摘要 + 本次变化 + 经营焦点 + 客户事实 + 空间助手。 */
+    /** 指标条：从空间既有数据派生的可比数值，只展示当前值与口径脚注，不做新旧对比；位于概览最上方（M02-3 §4.4，与移动端同口径同源）。 */
+    function metricStrip(w, state) {
+      const followupCount = state.followups.filter(item => item.space === w.id).length + F.weeklyReviewsOf(w.id, state).length;
+      const placements = F.spacePlacements(w.id, state).length;
+      const docs = state.documents.filter(item => item.space === w.id && item.status === 'success').length;
+      const pending = [...new Set([...(w.pendingConfirm || []), ...state.spaceChanges.filter(c => c.space === w.id).flatMap(c => c.pendingConfirm || [])])].length;
+      const amount = (w.opps || []).reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0);
+      const metrics = [
+        [amount || '—', '商机金额 · 万元', `已确权商机 ${(w.opps || []).length} 个`],
+        [followupCount, '跟进 · 次', '含周复盘，按提交计'],
+        [placements, '归位录音 · 份', '已归位到本空间'],
+        [docs, '外部资料 · 份', '已成功挂载'],
+        [pending, '待确认 · 项', '含历史遗留']
+      ];
+      return `<section class="fp-metricstrip" data-overview-metrics>${metrics.map(([value, label, hint]) => `<div class="fp-metricstrip-item" data-metric><strong>${e(String(value))}</strong><span>${e(label)}</span><small>${e(hint)}</small></div>`).join('')}</section>`;
+    }
+
+    /** 带来可见变化的一次完成结果：新增、前后对比或待确认任一非空。 */
+    const hasVisibleChange = item => !!(item && item.status === 'done' && (item.added.length || item.updated.length || item.pendingConfirm.length));
+
+    /** 变化摘要：受影响字段 + 新增/更新/待确认计数；时间线节点不用来源摘要代替。 */
+    function changeSummaryText(item) {
+      const fields = [...new Set((item.updated || []).map(entry => entry.field))];
+      return `受影响：${fields.length ? `${fields.join('、')} · ` : ''}新增 ${item.added.length} · 更新 ${item.updated.length} · 待确认 ${item.pendingConfirm.length}`;
+    }
+
+    /** 单次变化详情抽屉：更新面板节点、录音归位与消息中心深链共用同一入口。 */
+    function openChangeDetail(id) {
+      const space = F.space(spaceId);
+      const change = space && F.changesOf(spaceId).find(item => item.id === id);
+      if (!change) { SC.toast('该次变化不在当前可见范围。', 'bad'); return; }
+      F.drawer('本次变化详情 · ' + change.id, `<div class="fp-stack" data-change-detail>${changeCard(change, space)}</div>`, mask => F.bind(mask, { source: ref => openSource(ref) }));
+    }
+
+    /**
+     * 更新抽屉内容：顶部最近一次变化（完整卡片），下方与跟进 Tab 同源的全量倒序事件流。
+     * 由 chrome 右上角更新入口（图标 + 红点）唤出；概览常显区与右侧栏不再放更新内容（M02-3 §4.2-4.3，0921 口径）。
+     */
+    function updatesBodyHtml(w, state) {
+      const history = F.updateHistory(w.id, state);
+      const processing = history.filter(item => item.status === 'processing');
+      const latestChanged = history.find(hasVisibleChange);
+      const latest = history[0];
+      let statusHtml;
+      if (latestChanged) {
+        statusHtml = `<div class="fp-updates-latest" data-updates-status="changed" data-change-latest>${changeCard(latestChanged, w)}</div>`;
+      } else if (latest && latest.status === 'failed') {
+        statusHtml = `<div class="fp-callout fp-callout--warn" data-updates-status="failed"><strong>更新未完成：</strong>${e(latest.reason || '本次更新未完成，原内容保留。')}<small class="fp-sub">${e(latest.sourceLabel)} · ${e(latest.at)} · 当前展示上一版（${e(w.overviewUpdatedAt || '时间未记录')}）</small></div>`;
+      } else if (processing.length && !history.some(item => item.status === 'done' || item.status === 'nochange')) {
+        statusHtml = '<div class="fp-callout" data-updates-status="processing">客户信息正在更新，当前展示上一版内容。</div>';
+      } else if (latest) {
+        statusHtml = `<p class="fp-hint" data-updates-status="idle">最后更新 ${e(latest.at)} · ${latest.status === 'nochange' ? '最近一次处理未发现变化 · ' : ''}共 ${history.length} 次更新</p>`;
+      } else {
+        statusHtml = `<div class="fp-empty fp-empty--slim" data-updates-status="empty"><h3>暂无内容更新记录</h3><p>跟进、周复盘、录音归位与外部资料带来的变化，会按时间倒序留痕在这里。</p></div>`;
+      }
+      // 最近一次有变化之外的补充状况一句话带过，不另起模块。
+      const extra = [
+        latestChanged && processing.length ? `另有 ${processing.length} 项内容正在更新` : '',
+        latestChanged && latest && latest.status === 'nochange' ? `最近处理 ${latest.at} · 未发现变化` : '',
+        latestChanged && latest && latest.status === 'failed' ? `最近一次 ${latest.sourceLabel} 更新失败，原内容保留` : ''
+      ].filter(Boolean);
+      const sourceType = { followup: '跟进记录', weekly_review: '周复盘', meeting: '客户录音', document: '外部资料', solution: '方案往来' };
+      const node = item => {
+        const [label, tone] = changeStatusMeta[item.status] || ['处理中', 'brand'];
+        const body = item.status === 'processing'
+          ? '<p class="u-t3">正在更新，完成后展示本次变化。</p>'
+          : item.status === 'failed'
+            ? `<p>${e(item.reason || '本次更新未完成，原内容保留。')}</p>`
+            : item.status === 'nochange'
+              ? '<p>处理完成，本次未发现客户信息变化。</p>'
+              : `<p>${e(changeSummaryText(item))}</p>`;
+        const actions = [
+          item.sourceRef && ['followup', 'meeting', 'document', 'solution'].includes(item.source) ? F.button('查看原文', 'source', `${item.source}:${item.sourceRef}`) : '',
+          hasVisibleChange(item) ? F.button('查看本次变化', 'change-open', item.id) : ''
+        ].filter(Boolean).join('');
+        return `<article class="fp-event fp-upnode" data-history-node="${e(item.id)}" data-node-status="${e(item.status)}">
+          <div class="fp-actions"><strong>${e(item.sourceLabel)}</strong>${F.badge(label, tone)}</div>
+          <small class="fp-upnode-meta">${e(item.at)} · ${e(sourceType[item.source] || '内容进入')}</small>
+          ${body}
+          ${actions ? `<div class="fp-actions">${actions}</div>` : ''}
+        </article>`;
+      };
+      return `${statusHtml}
+        ${extra.length ? `<p class="fp-hint">${e(extra.join('；'))}</p>` : ''}
+        ${history.length ? `<div class="fp-updates-history" data-update-history><div class="fp-section-head"><h3>更新历史 · 共 ${history.length} 次</h3><span class="u-t3">与跟进记录同源，倒序全量保留</span></div><div class="fp-timeline">${history.map(node).join('')}</div></div>` : ''}`;
+    }
+
+    /* 已读变化集合：红点只表达「有新结果可看」，打开更新抽屉即视为已读（M05-1 §4.2）。 */
+    const READ_KEY = 'sc-v02-space-read-changes';
+    const readChanges = () => { try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]')); } catch (error) { return new Set(); } };
+    const markChangeRead = id => { const set = readChanges(); set.add(id); try { localStorage.setItem(READ_KEY, JSON.stringify([...set])); } catch (error) { /* 本地存储不可用时红点保持常亮，不影响阅读 */ } };
+
+    function openUpdates() {
+      const w = F.space(spaceId);
+      if (!w) return;
+      const latestChanged = F.updateHistory(w.id).find(hasVisibleChange);
+      F.drawer('空间更新 · ' + w.customer, `<div class="fp-stack" data-updates-panel>${updatesBodyHtml(w, F.load())}</div>`, mask => F.bind(mask, { source: ref => openSource(ref), 'change-open': id => openChangeDetail(id) }));
+      if (latestChanged) markChangeRead(latestChanged.id);
+      const bell = root.querySelector('[data-open-updates]');
+      if (bell) { bell.classList.remove('has-unread'); bell.setAttribute('aria-label', '空间更新'); }
+    }
+    /* ---------- 空间助手：与移动端空间助手同一套对话逻辑 ---------- */
+
+    /** 依据脚注：与移动端一致，答案不再挂溯源胶囊，改为可点的 〔n〕。 */
+    const citeHtml = (sources) => (sources || []).map((source, i) => {
+      const ref = source.type + ':' + source.id;
+      return source.available === false
+        ? `<button type="button" class="fp-cite" data-qa-cite-broken="${e(source.label)}" title="来源已失效">〔${i + 1}〕</button>`
+        : `<button type="button" class="fp-cite" data-qa-cite="${e(ref)}" title="${e(source.label)}">〔${i + 1}〕</button>`;
+    }).join('');
+
+    /** 消息操作：复制始终可用，重新生成只给最后一条答案（与移动端同规则）。 */
+    const chatActsHtml = (qaId, isLast) => `<div class="fp-chat-acts"><button type="button" class="fp-chat-act" data-action="qa-copy" data-value="${e(qaId)}">复制</button>${isLast ? `<button type="button" class="fp-chat-act" data-action="qa-regen" data-value="${e(qaId)}">重新生成</button>` : ''}</div>`;
+
+    /** 一条问答＝两条条目：用户批注 + 助手答案；时间栏取提问时刻。 */
+    function chatEntryHtml(item, isLast) {
+      const time = String(item.at || '').slice(11, 16);
+      return `<article class="fp-chat-entry fp-chat-entry--user" data-qa-user="${e(item.id)}" data-qa-id="${e(item.id)}"><span class="fp-chat-time">${e(time)}</span><div class="fp-chat-main"><div class="fp-chat-bubble">${e(item.question)}</div></div></article>
+        <article class="fp-chat-entry" data-qa-item="${item.hasEvidence ? 'answered' : 'no-evidence'}" data-qa-id="${e(item.id)}"><span class="fp-chat-time">${e(time)}</span><div class="fp-chat-main"><div class="fp-chat-answer" data-qa-answer>${e(item.answer)}${citeHtml(item.sources)}</div>${chatActsHtml(item.id, isLast)}</div></article>`;
+    }
+
+    /** 空会话引导区：只在没有历史且空间未冻结时出现，文案与移动端一致。 */
+    const chatWelcomeHtml = () => `<div class="fp-chat-welcome" data-qa-welcome>
+      <p class="fp-chat-eyebrow">空间助手</p><h3>只围绕这个空间作答</h3>
+      <p class="fp-chat-sub">答案只来自当前客户空间你有权查看的内容与原文依据；没有依据时如实说明，不推测。</p>
+      <div class="fp-chat-chips" data-qa-presets>${F.quickQuestions.map(([, label]) => `<button type="button" class="fp-chat-chip" data-action="ask" data-value="${e(label)}">${e(label)}</button>`).join('')}</div>
+    </div>`;
+
+    /** 对话区：历史按时间正序（最早的在上、最新的在下），冻结空间只读且不出现任何提问入口。 */
+    function chatBodyHtml(w, state) {
+      const frozen = (w.lifecycle || w.state) === 'frozen';
+      const qa = (state.spaceQA || []).filter(item => item.space === w.id).slice().reverse();
+      const entries = qa.map((item, index) => chatEntryHtml(item, index === qa.length - 1)).join('');
+      return `${frozen ? '<p class="fp-chat-notice" data-qa-frozen>空间已冻结，不开放新问答；以下为历史对话，只读。</p>' : ''}
+        ${qa.length ? entries : frozen ? '<p class="u-t3">暂无历史对话。</p>' : chatWelcomeHtml()}`;
+    }
+
+    /** 输入区：与移动端同规格——自增高输入框 + 发送/停止切换 + 口径说明。 */
+    const composerHtml = () => `<footer class="fp-composer">
+      <div class="fp-composer-row"><textarea class="fp-composer-field" data-qa-field rows="1" placeholder="向空间助手提问" aria-label="向空间助手提问"></textarea><button type="button" class="fp-composer-send" data-qa-send data-state="send" aria-label="发送">${SC.icon('arrow-right', 16)}</button></div>
+      <p class="fp-composer-note" data-qa-note>助手只读取当前空间你有权查看的内容作答</p>
+    </footer>`;
+
+    /**
+     * 助手抽屉：五个 Tab 都可从悬浮入口唤出，对话在抽屉内原地推进（不重画、不关抽屉）。
+     * 发送 → 骨架屏 → 流式答案 → 依据脚注；发送键在作答中切换为停止。
+     * window.FN_FAST 时跳过等待与流式，直接出结果（回归用）。
+     */
+    function openAssistant() {
+      const w = F.space(spaceId);
+      if (!w) return;
+      const frozen = (w.lifecycle || w.state) === 'frozen';
+      F.drawer('空间助手 · ' + w.customer, '<div class="fp-chat-shell" data-assistant-root></div>', (mask, close) => {
+        mask.querySelector('.fp-drawer').classList.add('fp-drawer--chat');
+        const root = mask.querySelector('[data-assistant-root]');
+        const box = () => root.querySelector('[data-space-qa]');
+        const field = () => root.querySelector('[data-qa-field]');
+        const sendBtn = () => root.querySelector('[data-qa-send]');
+        const noteEl = () => root.querySelector('[data-qa-note]');
+        const scrollEnd = () => { const node = box(); if (node) node.scrollTop = node.scrollHeight; };
+        const autoGrow = () => { const node = field(); if (!node) return; node.style.height = 'auto'; node.style.height = Math.min(node.scrollHeight, 132) + 'px'; };
+        const setComposer = state => {
+          const button = sendBtn();
+          if (!button) return;
+          button.dataset.state = state;
+          button.innerHTML = SC.icon(state === 'stop' ? 'stop' : 'arrow-right', 16);
+          button.setAttribute('aria-label', state === 'stop' ? '停止生成' : '发送');
+          const note = noteEl();
+          if (note) note.textContent = state === 'stop' ? '正在作答… 点击右侧按钮可停止' : '助手只读取当前空间你有权查看的内容作答';
+        };
+        let streaming = null;
+
+        function send(question) {
+          const text = String(question || '').trim();
+          const target = box();
+          if (!text || streaming || !target || frozen) return;
+          target.querySelector('[data-qa-welcome]')?.remove();
+          target.insertAdjacentHTML('beforeend', `<article class="fp-chat-entry fp-chat-entry--user" data-qa-user><span class="fp-chat-time">${e(F.now().slice(11, 16))}</span><div class="fp-chat-main"><div class="fp-chat-bubble">${e(text)}</div></div></article>
+            <article class="fp-chat-entry" data-qa-pending><span class="fp-chat-time">${e(F.now().slice(11, 16))}</span><div class="fp-chat-main"><div class="fp-chat-skel" data-qa-skel><i></i><i></i><i></i></div><div class="fp-chat-answer" data-qa-answer hidden></div></div></article>`);
+          scrollEnd();
+          setComposer('stop');
+          const pending = target.querySelector('[data-qa-pending]');
+          const skel = pending.querySelector('[data-qa-skel]');
+          const answerEl = pending.querySelector('[data-qa-answer]');
+
+          const run = () => {
+            let result;
+            try { result = F.askSpace(spaceId, text); }
+            catch (error) { streaming = null; pending.remove(); setComposer('send'); SC.toast(error.message, 'bad'); return; }
+            skel.remove();
+            answerEl.hidden = false;
+            pending.removeAttribute('data-qa-pending');
+            pending.setAttribute('data-qa-item', result.hasEvidence ? 'answered' : 'no-evidence');
+            pending.setAttribute('data-qa-id', result.id);
+            const full = result.answer;
+            const finish = () => {
+              streaming = null;
+              answerEl.innerHTML = e(full) + citeHtml(result.sources);
+              // 只有最后一条答案能重新生成，历史答案上的入口同步撤掉。
+              target.querySelectorAll('[data-action="qa-regen"]').forEach(button => button.remove());
+              answerEl.insertAdjacentHTML('afterend', chatActsHtml(result.id, true));
+              setComposer('send');
+              SC.toast(result.hasEvidence ? '已按当前空间上下文作答' : '当前空间没有可用依据，未生成推测答案', result.hasEvidence ? 'ok' : 'bad');
+              scrollEnd();
+            };
+            if (window.FN_FAST) { finish(); return; }
+            let pos = 0;
+            const timer = window.setInterval(() => {
+              pos = Math.min(pos + 5, full.length);
+              answerEl.innerHTML = e(full.slice(0, pos)) + (pos < full.length ? '<span class="fp-caret"></span>' : '');
+              scrollEnd();
+              if (pos >= full.length) { window.clearInterval(timer); finish(); }
+            }, 30);
+            streaming = {
+              cancel() {
+                window.clearInterval(timer);
+                streaming = null;
+                answerEl.innerHTML = e(full.slice(0, pos));
+                setComposer('send');
+                if (noteEl()) noteEl().textContent = '已停止生成';
+              }
+            };
+          };
+
+          if (window.FN_FAST) { run(); return; }
+          const timer = window.setTimeout(run, 480);
+          streaming = {
+            cancel() {
+              window.clearTimeout(timer);
+              streaming = null;
+              pending.remove();
+              setComposer('send');
+              if (noteEl()) noteEl().textContent = '已停止生成';
+            }
+          };
+        }
+
+        // 依据脚注与预设问题统一走委托；失效来源如实说明，不伪装成可读。
+        root.addEventListener('click', event => {
+          const cite = event.target.closest('[data-qa-cite]');
+          if (cite) { openSource(cite.dataset.qaCite); return; }
+          const broken = event.target.closest('[data-qa-cite-broken]');
+          if (broken) SC.toast('来源已失效：' + broken.dataset.qaCiteBroken, 'bad');
+        });
+        root.addEventListener('contextmenu', event => {
+          const entry = event.target.closest('[data-qa-item]');
+          if (!entry) return;
+          event.preventDefault();
+          entry.classList.toggle('is-acts-open');
+        });
+
+        root.innerHTML = `<div class="fp-chat" data-space-qa>${chatBodyHtml(w, F.load())}</div>${frozen ? '' : composerHtml()}`;
+        const fieldNode = field();
+        if (fieldNode) {
+          fieldNode.oninput = autoGrow;
+          fieldNode.onkeydown = event => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); sendBtn().click(); }
+          };
+          const button = sendBtn();
+          button.onclick = () => {
+            if (button.dataset.state === 'stop') { streaming?.cancel(); return; }
+            const text = fieldNode.value.trim();
+            if (!text) return;
+            fieldNode.value = '';
+            autoGrow();
+            send(text);
+          };
+          if (!frozen) fieldNode.focus();
+        }
+        scrollEnd();
+
+        F.bind(mask, {
+          ask: question => send(question),
+          'qa-copy': id => {
+            const item = (F.load().spaceQA || []).find(entry => entry.id === id);
+            if (!item) { SC.toast('这条问答已不在当前空间的历史里。', 'bad'); return; }
+            const text = `${item.question}\n${item.answer}`;
+            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text);
+            SC.toast('已复制', 'ok');
+          },
+          'qa-regen': id => {
+            if (streaming) { SC.toast('生成中，可先停止再操作。', 'bad'); return; }
+            const item = (F.load().spaceQA || []).find(entry => entry.id === id);
+            if (!item) { SC.toast('这条问答已不在当前空间的历史里。', 'bad'); return; }
+            try { F.discardSpaceQA(spaceId, id); } catch (error) { SC.toast(error.message, 'bad'); return; }
+            root.querySelectorAll(`[data-qa-id="${id}"]`).forEach(node => node.remove());
+            send(item.question);
+          }
+        });
+      });
+    }
+    /** 概览为默认入口（0921 版面）：指标条 → AI 一句话判断 → 经营焦点四卡 → 客户事实双卡 → 低频板块折叠；问答迁入空间助手抽屉。 */
     function renderOverview(w, state) {
       const panels = F.overview(w, state);
       const byKey = Object.fromEntries(panels.map(panel => [panel.key, panel]));
-      const changes = F.changesOf(w.id, state);
-      const latest = changes[0];
-      const qa = (state.spaceQA || []).filter(item => item.space === w.id);
       const status = w.overviewStatus || 'ready';
       const statusMeta = status === 'failed' ? ['更新失败', 'amber'] : status === 'updating' ? ['更新中', 'brand'] : ['已更新', 'green'];
-      const frozen = (w.lifecycle || w.state) === 'frozen';
       const panelBadge = panel => panel.status === 'pending' ? F.badge('待确认', 'amber') : panel.status === 'conflict' ? F.badge('存在冲突', 'amber') : '';
-      const panelCard = (panel, focus) => `<section class="fp-overview-panel${focus ? ' fp-overview-panel--focus' : ''}" data-overview-panel="${e(panel.key)}" data-panel-status="${e(panel.status)}"><header><h3>${e(panel.title)}</h3>${panelBadge(panel)}</header>${panel.text ? `<p>${e(panel.text)}</p>` : `<p class="u-t3" data-panel-empty>暂无可用依据，不输出结论。</p>`}${panel.text && panel.sources.length ? sourceChips(panel.sources) : ''}</section>`;
+      const panelCard = (panel, focus) => `<section class="fp-ov${focus ? ' fp-ov--focus' : ''}" data-overview-panel="${e(panel.key)}" data-panel-status="${e(panel.status)}"><header><h3>${e(panel.title)}</h3>${panelBadge(panel)}</header>${panel.text ? `<p>${e(panel.text)}</p>` : `<p class="u-t3" data-panel-empty>暂无可用依据，不输出结论。</p>`}${panel.text && panel.sources.length ? sourceChips(panel.sources) : ''}</section>`;
+      // 低频板块折叠：与移动端同一折叠清单（基本情况 / 商机与金额 / 待确认信息），展开后同样可溯源；待确认徽标在折叠态也可见。
+      const panelFold = panel => `<details class="fp-fold" data-overview-panel="${e(panel.key)}" data-panel-status="${e(panel.status)}"><summary><span class="fp-fold-title">${e(panel.title)}</span>${panelBadge(panel)}${SC.icon('chevron', 13)}</summary><div class="fp-fold-body">${panel.text ? `<p>${e(panel.text)}</p>` : `<p class="u-t3" data-panel-empty>暂无可用依据，不输出结论。</p>`}${panel.text && panel.sources.length ? sourceChips(panel.sources) : ''}</div></details>`;
       const verdict = byKey.verdict || { key: 'verdict', title: '一句话判断', text: '', sources: [], status: 'empty' };
-      // 高价值结论板块前置为大卡，事实类板块收进三列网格；十个板块全部保留且均可溯源。
-      const focusKeys = ['last', 'blocker', 'pending', 'recent'];
-      const factKeys = ['who', 'basics', 'risk', 'people', 'opportunity'];
-      return `<div class="fp-stack" data-overview>
+      // 焦点四卡放时间敏感信号；事实双卡放客户级底座信息；十个板块全部保留且均可溯源。
+      const focusKeys = ['last', 'blocker', 'risk', 'recent'];
+      const factKeys = ['who', 'people'];
+      const foldKeys = ['basics', 'opportunity', 'pending'];
+      return `<div class="fp-stack fp-overview" data-overview>
+        ${metricStrip(w, state)}
         <section class="fp-verdict" data-overview-panel="verdict" data-panel-status="${e(verdict.status)}">
           <div class="fp-verdict-head"><span class="fp-ai-tag">${SC.icon('sparkles', 13)}AI 全景 · ${e(verdict.title)}</span><span data-overview-status="${e(status)}">${F.badge(statusMeta[0], statusMeta[1])}</span></div>
           ${verdict.text ? `<p class="fp-verdict-text">${e(verdict.text)}</p>${verdict.sources.length ? sourceChips(verdict.sources) : ''}` : '<p class="u-t3" data-panel-empty>暂无可用依据，不输出结论。</p>'}
           <footer class="fp-verdict-foot">结论由空间内原文收成，点击依据可回溯原文 · 更新时间 ${e(w.overviewUpdatedAt || '—')} · 当前版本 ${e(w.lastReadableVersion || '—')}</footer>
         </section>
-        ${latest ? `<section class="fp-panel fp-pad fp-change-panel" data-change-latest><header class="fp-section-head"><h3>本次变化</h3>${changes.length > 1 ? F.button('查看全部变化 (' + changes.length + ')', 'changes-all') : ''}</header>${changeCard(latest, w)}</section>` : '<div class="fp-callout" data-change-latest>暂无内容更新记录。</div>'}
-        <div class="fp-section-head"><h3>经营焦点</h3><span class="u-t3">上次进展、当前卡点、待确认事项与最近动静</span></div>
-        <div class="fp-overview-grid fp-overview-grid--focus">${focusKeys.map(key => panelCard(byKey[key], true)).join('')}</div>
-        <div class="fp-section-head"><h3>客户事实</h3><span class="u-t3">客户级信息与商机事实，结论均可回溯原文</span></div>
-        <div class="fp-overview-grid fp-overview-grid--facts">${factKeys.map(key => panelCard(byKey[key])).join('')}</div>
-        <section class="fp-panel fp-pad fp-qa" data-space-qa>
-          <header class="fp-section-head"><h3>空间助手 · 快捷问答</h3><span class="u-t3">只读取当前空间内你有权的上下文；没有依据时不生成推测答案</span></header>
-          ${frozen
-            ? '<div class="fp-callout" data-qa-frozen>空间已冻结，不开放新的问答；历史对话仍可只读查看。</div>'
-            : `<form class="fp-qa-form" data-qa-form><input name="question" type="text" placeholder="向空间助手提问，例如：当前卡点是什么？" autocomplete="off" aria-label="向空间助手提问"><button type="submit" class="btn btn--primary">提问</button></form><div class="fp-actions">${F.quickQuestions.map(([key, label]) => `<button type="button" class="btn fp-qa-chip" data-action="ask" data-value="${e(label)}">${e(label)}</button>`).join('')}</div>`}
-          ${qa.length ? `<div class="fp-timeline u-mt3">${qa.map(item => `<article class="fp-event" data-qa-item="${item.hasEvidence ? 'answered' : 'no-evidence'}"><div class="fp-actions"><strong>${e(item.question)}</strong>${F.badge(item.hasEvidence ? '有依据' : '无可用依据', item.hasEvidence ? 'green' : 'neutral')}</div><p>${e(item.answer)}</p>${item.sources.length ? sourceChips(item.sources) : ''}<small>${e(item.at)}</small></article>`).join('')}</div>` : '<p class="u-t3 u-mt3">暂无问答记录。</p>'}
-        </section>
+        <div class="fp-ovgroup">
+          <div class="fp-section-head"><h3>经营焦点</h3><span class="u-t3">上次进展、当前卡点、风险与最近动静</span></div>
+          <div class="fp-ov-grid fp-ov-grid--focus">${focusKeys.map(key => panelCard(byKey[key], true)).join('')}</div>
+        </div>
+        <div class="fp-ovgroup">
+          <div class="fp-section-head"><h3>客户事实</h3><span class="u-t3">客户级信息，结论均可回溯原文；低频板块默认折叠</span></div>
+          <div class="fp-ov-grid">${factKeys.map(key => panelCard(byKey[key])).join('')}</div>
+          <div class="fp-fold-group">${foldKeys.map(key => panelFold(byKey[key])).join('')}</div>
+        </div>
       </div>`;
     }
 
@@ -353,7 +775,10 @@
       </div>`;
     }
 
-    /** 资料 Tab：内容范围按层展示装载状态，外部资料逐份展示挂载与概览结果。 */
+    /**
+     * 资料 Tab：内容范围是只读装载读数，收成顶部一张指标卡（六格横排），不再占六行列表；
+     * 外部资料逐份展示挂载与概览结果，Tab 里真正可操作的只有下面这张表。
+     */
     function renderDocuments(w, state) {
       const layers = F.contentScope(w, state);
       const docs = state.documents.filter(doc => doc.space === w.id);
@@ -361,17 +786,17 @@
       const docMeta = { success: ['已挂载', 'green'], overview_updating: ['概览更新中', 'brand'], failed: ['挂载失败', 'amber'], duplicate: ['重复资料', 'neutral'] };
       const rows = docs.map(doc => {
         const meta = docMeta[doc.status] || ['处理中', 'brand'];
-        const canRetry = doc.status === 'failed' && w.state === 'active' && (F.role === 'ADM' || (F.role === 'SOL' && doc.uploader === F.actor?.id));
+        const canRetry = doc.status === 'failed' && w.state === 'active' && (F.role === 'MGR' || (F.role === 'SOL' && doc.uploader === F.actor?.id));
         return `<tr data-document-row data-status="${e(doc.status)}"><td><strong>${e(doc.name)}</strong><small>${e(doc.id)}${doc.note ? ' · ' + e(doc.note) : ''}</small></td><td>${e(F.name(doc.uploader))}</td><td>${e(doc.uploadedAt)}</td><td>${e(doc.size || '—')}</td><td>${F.badge(meta[0], meta[1])}${doc.reason ? `<small>${e(doc.reason)}</small>` : ''}</td><td>${e(doc.overviewStatus === 'applied' ? '已参与概览' : doc.overviewStatus === 'updating' ? '概览更新中' : '未参与概览')}</td><td>${F.button('查看原文', 'source', 'document:' + doc.id)}${canRetry ? F.button('单份重试', 'doc-retry', doc.id) : ''}</td></tr>`;
       });
       return `<div class="fp-stack">
-        <section class="fp-panel fp-pad" data-content-scope>
-          <header class="fp-section-head"><h3>内容范围</h3><span class="u-t3">按确权范围装载；每层独立记录状态，单层失败不影响其余层可读</span></header>
-          <ul class="fp-scope-list">${layers.map(layer => { const meta = layerMeta[layer.status]; return `<li data-scope-layer="${e(layer.key)}" data-scope-status="${e(layer.status)}"><span class="fp-scope-dot" aria-hidden="true"></span><strong>${e(layer.label)}</strong>${F.badge(meta[0], meta[1])}<span class="fp-scope-count">${layer.count}</span><small>${e(layer.detail)}</small></li>`; }).join('')}</ul>
-          <p class="fp-hint u-mt2" data-scope-result>当前版本 ${e(w.lastReadableVersion || '—')} · 更新时间 ${e(w.readinessUpdatedAt || '—')}${w.readiness === 'failed' ? ' · 失败环节：' + e(w.failure?.stage || '内容处理') : ''}</p>
+        <section class="fp-scope-strip" data-content-scope aria-label="内容范围装载状态">
+          <header class="fp-section-head"><h3>内容范围</h3><span class="u-t3">按确权范围装载；每层独立记录状态，单层失败不影响其余层可读</span>${F.canRefreshContent(w, state) ? F.button('刷新全部内容', 'content-refresh', w.id) : ''}</header>
+          <div class="fp-metricstrip fp-scope-metrics">${layers.map(layer => { const meta = layerMeta[layer.status]; return `<div class="fp-metricstrip-item fp-scope-cell" data-scope-layer="${e(layer.key)}" data-scope-status="${e(layer.status)}"><span class="fp-scope-name"><span class="fp-scope-dot" aria-hidden="true"></span>${e(layer.label)}</span><strong>${layer.count}</strong><small>${F.badge(meta[0], meta[1])}<span class="fp-scope-detail">${e(layer.detail)}</span></small></div>`; }).join('')}</div>
+          <p class="fp-hint" data-scope-result>当前版本 ${e(w.lastReadableVersion || '—')} · 更新时间 ${e(w.readinessUpdatedAt || '—')}${w.readiness === 'failed' ? ' · 失败环节：' + e(w.failure?.stage || '内容处理') : ''}</p>
         </section>
         <section class="fp-panel">
-          <header class="fp-panel-head"><div><h3>外部资料</h3><p class="fp-hint">只展示本空间资料，不与同客户其他销售空间共享。</p></div>${F.canUpload(w, state) ? F.button('上传 .md 资料', 'doc-upload', w.id, true) : F.role === 'SOL' ? '<span class="fp-readonly">冻结空间或承接范围外不开放上传。</span>' : ''}</header>
+          <header class="fp-panel-head"><div><h3>外部资料</h3><p class="fp-hint">只展示本空间资料，不与同客户其他销售空间共享。</p></div>${F.canUpload(w, state) ? F.button('上传 .md 资料', 'doc-upload', w.id, true) : F.role === 'SOL' ? '<span class="fp-readonly">冻结空间或承接范围外不开放上传。</span>' : F.role === 'MGR' ? '<span class="fp-readonly">冻结空间不开放上传。</span>' : ''}</header>
           ${F.table(['资料', '上传人', '上传时间', '大小', '挂载状态', '概览参与', '操作'], rows, { caption: `${w.customer} 的外部资料与挂载状态`, emptyMessage: '当前空间尚未挂载外部资料。', countLabel: '份资料', compact: true })}
         </section>
       </div>`;
@@ -392,24 +817,16 @@
       const opps = w.opps || [];
       F.form('关联我的录音 · ' + w.customer,
         `<div class="fp-callout">目标空间固定为 <strong>${e(w.customer)}</strong>（${e(w.id)}）。本版不提供上传录音，只能从三方服务已同步的录音里挑选。</div>`
-        + F.field('选择录音 *', 'recording', options[0].id, 'select', options.map(item => [item.id, `${item.title} · ${item.date}${item.transcriptStatus === 'ready' ? '' : '（等待转写）'}`]))
+        + F.field('选择录音 *', 'recording', options[0].id, 'select', options.map(item => [item.id, `${item.title} · ${item.date}${F.recordingSourceIssue(item) ? '（来源内容异常）' : ''}`]))
         + F.field('关联商机 *', 'opportunityId', opps.length === 1 ? opps[0].id : '', 'select', opps.length === 1 ? opps.map(o => [o.id, `${o.name}（${o.id}）`]) : [['', '请选择本空间下的一条商机'], ...opps.map(o => [o.id, `${o.name}（${o.id}）`])])
         + `<p class="fp-hint">${opps.length > 1 ? '本空间有多条商机，必须由你指定一条，系统不代选。' : '本空间仅一条商机，已自动带出，可以修改。'}归位成功不等于客户信息已更新。</p>`,
         values => { F.placeRecording(values.recording, { space: w.id, opportunityId: values.opportunityId }); },
         () => draw(), '确认关联');
     }
 
-    /** 选择与校验、挂载结果逐份反馈；不合格文件不提交，成功文件立即进入资料 Tab。 */
+    /** 本机选择 .md，逐份校验后挂载；不合格文件不提交，成功文件立即进入资料 Tab。 */
     function openUpload(w) {
-      const samples = F.documentSamples;
-      F.form('上传外部资料 · ' + w.customer, `<div class="fp-callout">目标空间固定为 <strong>${e(w.customer)}</strong>（${e(w.id)}），同批文件不在上传过程中切换目标。仅支持 <code>.md</code>。</div><fieldset class="fp-checks" data-upload-queue><legend>选择资料（可多选，逐份校验）</legend>${samples.map(sample => `<label><input type="checkbox" name="docs" value="${e(sample.key)}"><span>${e(sample.name)}<small>${e(sample.size)}${sample.invalid ? ' · 预期校验不通过' : sample.mountFail ? ' · 预期挂载失败，可重试' : sample.key === 'duplicate' ? ' · 预期识别为重复资料' : sample.key === 'samename' ? ' · 同名不同内容，作为新增' : ''}</small></span></label>`).join('')}</fieldset><p class="fp-hint">不合格文件不提交，其余文件继续；每份文件挂载前会再次校验权限与空间状态。</p>`, (_values, mask) => {
-        const keys = [...mask.querySelectorAll('[name=docs]:checked')].map(node => node.value);
-        const results = F.uploadDocuments(w.id, keys);
-        setTimeout(() => {
-          const meta = { success: ['已挂载并触发概览更新', 'green'], failed: ['挂载失败，可单份重试', 'amber'], rejected: ['校验不通过，未提交', 'neutral'], duplicate: ['内容重复，指向已有资料', 'neutral'], blocked: ['已停止挂载', 'amber'] };
-          F.drawer('本批挂载结果', `<div class="fp-stack"><p class="fp-hint">逐份反馈，成功结果不会被单份失败覆盖。</p><ul class="fp-upload-results">${results.map((item, index) => { const m = meta[item.status] || ['处理中', 'brand']; return `<li data-upload-result="${e(item.status)}"><span class="fp-upload-index">${index + 1}</span><div><strong>${e(item.name)}</strong>${F.badge(m[0], m[1])}${item.reason ? `<small>${e(item.reason)}</small>` : ''}${item.note ? `<small>${e(item.note)}</small>` : ''}</div></li>`; }).join('')}</ul></div>`);
-        }, 0);
-      }, () => draw(), '提交并逐份校验');
+      F.documentUploadForm(w, draw);
     }
 
     function draw() {
@@ -418,41 +835,30 @@
       const state = F.load(), tasks = F.records('tasks', state).filter(t => t.space === w.id), followups = F.records('followups', state).filter(r => r.space === w.id), ready = readinessMeta(w);
       const frozen = (w.lifecycle || w.state) === 'frozen';
       const pool = w.pool ? F.badge(w.pool, 'brand') : F.badge('待补客户池', 'amber');
-      // R05：运营与超管进入全量只读视图，页面不提供写入口径之外的入口。
-      const readonly = ['ADM', 'MGR'].includes(F.role);
+      // R05：超管进入全量只读；销售运营可在资料页补外部资料并刷新全部内容，其他页签仍只读。
+      const readonly = F.role === 'ADM';
       const retryButton = readonly && (ready.status === 'failed' || ready.status === 'updating') ? F.button(ready.status === 'failed' ? '重试内容处理' : '查看处理状态', 'space-retry', w.id) : '';
       const lifeCallout = frozen ? '<div class="fp-callout fp-callout--warn">空间已冻结：商机确权与客户级确权均已结束。历史记录可查看，跟进与方案回复已关闭；内容重试不会解冻空间。</div>' : w.ownerOnly ? '<div class="fp-callout">当前仅有客户级确权，可查看客户资料；尚无本人确权商机。商机列表为空不会导致空间冻结。</div>' : '';
-      // 有变化或待确认时给直达入口；处理中只说明保留上一版，不清空页面。
-      const changes = F.changesOf(w.id, state);
-      const latestChange = changes[0];
-      const updateCallout = !latestChange ? '' : latestChange.status === 'processing'
-        ? `<div class="fp-callout" data-update-hint="processing">客户信息正在更新（来源：${e(latestChange.sourceLabel)}）；当前展示上一版内容。</div>`
-        : latestChange.status === 'done' && (latestChange.added.length || latestChange.updated.length || latestChange.pendingConfirm.length)
-          ? `<div class="fp-callout" data-update-hint="done"><strong>客户信息已更新：</strong>${e(latestChange.sourceLabel)} 带来 ${latestChange.added.length + latestChange.updated.length} 处变化${latestChange.pendingConfirm.length ? `，${latestChange.pendingConfirm.length} 项待确认` : ''}。<span class="fp-actions u-mt2">${F.button('查看本次变化', 'goto-overview', '', true)}</span></div>`
-          : latestChange.status === 'nochange' ? `<div class="fp-callout" data-update-hint="nochange">最近一次输入未带来客户信息变化，仅更新了页面状态。</div>` : '';
+      // 更新信号只有一个出口：chrome 右上角铃铛红点表达「有新结果可看」，打开更新抽屉即视为已读（M05-1 §4.2，0921 口径）。
+      const latestChanged = F.updateHistory(w.id, state).find(hasVisibleChange);
+      const updatesUnread = !!latestChanged && !readChanges().has(latestChanged.id);
       const readinessCallout = ready.status === 'failed' ? `<div class="fp-callout fp-callout--warn" data-space-failure><strong>内容更新失败：</strong>${e(w.failure?.reason || w.readinessReason || '内容处理失败')}。${w.lastReadableVersion ? `上一版 ${e(w.lastReadableVersion)} 仍可读。` : ''}${retryButton ? `<span class="fp-actions u-mt2">${retryButton}</span>` : ''}</div>` : ready.status === 'updating' ? `<div class="fp-callout" data-space-failure>内容正在更新中；${w.lastReadableVersion ? `上一版 ${e(w.lastReadableVersion)} 继续可读。` : '首次建立完成前暂不开放新增内容。'}</div>` : '';
-      const activity = changes.slice(0, 3);
       // R13：销售本人的正常且有商机确权的空间展示标记状态与入口，与今日该跟页共用同一份标记数据。
       const insightMark = (state.insightMarks || []).find(item => item.space === w.id && item.sales === w.sales && !item.canceledAt);
       const markChip = insightMark && (insightMark.starred || insightMark.pause) ? `${insightMark.starred ? F.badge('★ 已星标', 'brand') : ''}${insightMark.pause ? F.badge(insightMark.pause.until && insightMark.pause.until < F.today ? '暂不跟进 · 已失效' : '暂不跟进', insightMark.pause.until && insightMark.pause.until < F.today ? 'neutral' : 'amber') : ''}` : '';
       const canMark = F.role === 'SLS' && w.sales === F.actor.id && w.state === 'active' && w.opps.length > 0;
-      root.innerHTML = `<section class="fp-hero" data-space-id="${e(w.id)}">
-        <div class="fp-hero-main">
-          <div class="fp-hero-chips"><span data-space-lifecycle="${frozen ? 'frozen' : 'active'}">${F.badge(frozen ? '已冻结 · 只读' : '进行中', frozen ? 'neutral' : 'green')}</span>${pool}${markChip}<span data-space-readiness="${ready.status}">${F.badge('内容' + ready.label, ready.tone)}</span>${readonly ? F.badge('全量只读视图', 'neutral') : ''}<span class="u-t3">${e(w.id)}</span></div>
-          <h1>${e(w.customer)}</h1>
-          <p class="fp-hero-sub">${e(w.industry)} · ${e(F.name(w.sales))} · ${e(w.stage)}</p>
-          <div class="fp-hero-brief"><span class="fp-ai-tag">${SC.icon('sparkles', 12)}AI 经营重点</span><p>${e(w.brief)}</p><small>最近更新 ${e(w.updated)} · 最近可读版本 ${e(w.lastReadableAt || '—')} · 依据：客户沟通记录</small></div>
+      root.innerHTML = `<section class="fp-chrome" data-space-id="${e(w.id)}">
+        <div class="fp-chrome-main">
+          <div class="fp-chrome-chips" data-space-chips><span data-space-lifecycle="${frozen ? 'frozen' : 'active'}">${F.badge(frozen ? '已冻结 · 只读' : '进行中', frozen ? 'neutral' : 'green')}</span><span data-space-readiness="${ready.status}">${F.badge('内容' + ready.label, ready.tone)}</span>${pool}${markChip}<span data-space-owner-type="${e(w.entitlementType || 'customer_only')}">${F.badge(entitlementText(w), 'neutral')}</span>${readonly ? F.badge('全量只读视图', 'neutral') : F.role === 'MGR' ? F.badge(frozen ? '全量查看 · 冻结只读' : '全量查看 · 资料可写', 'neutral') : ''}</div>
+          <h1 class="fp-chrome-title">${e(w.customer)}</h1>
+          <p class="fp-chrome-sub">${e(w.industry)} · ${e(F.name(w.sales))} · ${e(w.stage)}<span class="fp-chrome-id">${e(w.id)}</span></p>
         </div>
-        <div class="fp-hero-side">
-          ${F.field('切换客户空间', 'space', w.id, 'select', F.visible().map(x => [x.id, x.customer + ' · ' + F.name(x.sales)]))}
-          <div class="fp-actions">${F.button('生命周期', 'space-history', w.id)}${canMark ? F.button('星标 / 暂不跟进', 'space-mark', w.id) : ''}${F.canWrite(w) ? F.button('记录跟进', 'followup', w.id, true) + F.button('记录周复盘', 'weekly', w.id) : F.canSend(w) ? F.button('推送方案', 'send', w.id, true) : ''}</div>
-          <dl class="fp-hero-meta">
-            <div><dt>确权来源</dt><dd data-space-owner-type="${e(w.entitlementType || 'customer_only')}">${e(entitlementText(w))}</dd></div>
-            <div><dt>当前商机</dt><dd>${w.entitlements?.opportunities?.length ? `${w.entitlements.opportunities.length} 条` : '无本人确权商机'}</dd></div>
-            <div><dt>内容就绪</dt><dd>${e(ready.label)}</dd></div>
-          </dl>
+        <div class="fp-chrome-side">
+          <label class="fp-chrome-switch"><span class="fp-sr-only">切换客户空间</span><select name="space" aria-label="切换客户空间">${F.visible().map(x => `<option value="${e(x.id)}" ${x.id === w.id ? 'selected' : ''}>${e(x.customer)} · ${e(F.name(x.sales))}</option>`).join('')}</select></label>
+          <button type="button" class="fp-bell${updatesUnread ? ' has-unread' : ''}" data-open-updates aria-label="空间更新${updatesUnread ? '，有新更新' : ''}" title="空间更新">${SC.icon('bell', 16)}</button>
+          <div class="fp-chrome-actions">${F.canWrite(w) ? F.button('记录跟进', 'followup', w.id, true) + F.button('记录周复盘', 'weekly', w.id) : F.canSend(w) ? F.button('推送方案', 'send', w.id, true) : ''}${F.button('生命周期', 'space-history', w.id)}${canMark ? F.button('星标 / 暂不跟进', 'space-mark', w.id) : ''}</div>
         </div>
-      </section>${lifeCallout}${readinessCallout}${updateCallout}<div class="fp-split"><div class="fp-stack"><section class="fp-panel">${F.tabs(entries, tab)}${tab === 'followup' ? `<nav class="fp-tabs fp-subtabs" aria-label="跟进内容分类">${subEntries.map(([key, label]) => `<button type="button" data-subtab="${key}" class="${key === sub ? 'is-active' : ''}" aria-pressed="${key === sub}">${label}</button>`).join('')}</nav>` : ''}<div class="fp-pad" data-tab-body></div></section></div><aside class="fp-stack">${F.panel('客户档案', `<div class="fp-pad"><dl class="fp-kv"><dt>客户等级</dt><dd>${F.badge(w.grade, 'brand')}</dd><dt>联系人</dt><dd>${e(w.contact)}</dd><dt>联系职位</dt><dd>信息技术负责人</dd><dt>归属销售</dt><dd>${e(F.name(w.sales))}</dd><dt>客户池</dt><dd>${pool}</dd><dt>确权来源</dt><dd>${e(entitlementText(w))}</dd><dt>内容就绪</dt><dd>${F.badge(ready.label, ready.tone)}</dd><dt>冻结原因</dt><dd>${frozen ? e(w.lifecycleEvents?.find(event => event.type === 'frozen')?.reason || '确权已结束') : '—'}</dd></dl></div>`)}${F.panel('下一步任务', `<div class="fp-pad fp-stack">${tasks.length ? tasks.map(t => `<div><div class="fp-actions">${F.badge(t.done ? '已完成' : t.due < F.today ? '已逾期' : '待跟进', t.done ? 'green' : 'amber')}<small class="u-t3">${t.due}</small></div><p class="u-mt2">${e(t.title)}</p>${!t.done && F.canWrite(w) ? `<div class="u-mt2">${F.button('标记完成', 'task', t.id)}</div>` : ''}</div>`).join('') : '<p class="u-t3">暂无待办任务</p>'}</div>`)}${F.panel('空间动态', `<div class="fp-pad fp-stack">${activity.length ? activity.map(change => { const meta = changeStatusMeta[change.status] || ['处理中', 'brand']; return `<div class="fp-activity"><span class="fp-activity-dot is-${e(change.status)}" aria-hidden="true"></span><div class="u-grow"><p>${e(change.sourceLabel)}</p><small class="u-t3">${e(change.at)} · ${e(meta[0])}</small></div></div>`; }).join('') + F.button('查看全部变化 (' + changes.length + ')', 'changes-all') : '<p class="u-t3">暂无内容更新记录。</p>'}</div>`)}</aside></div>`;
+      </section>${lifeCallout}${readinessCallout}<div class="fp-split"><div class="fp-stack"><section class="fp-panel fp-ws-panel">${F.tabs(entries, tab)}${tab === 'followup' ? `<nav class="fp-tabs fp-subtabs" aria-label="跟进内容分类">${subEntries.map(([key, label]) => `<button type="button" data-subtab="${key}" class="${key === sub ? 'is-active' : ''}" aria-pressed="${key === sub}">${label}</button>`).join('')}</nav>` : ''}<div class="fp-pad" data-tab-body></div></section></div><aside class="fp-stack fp-rail">${F.panel('下一步任务', `<div class="fp-pad fp-stack">${tasks.length ? tasks.map(t => `<div class="fp-task${t.done ? ' is-done' : ''}"><div class="fp-actions">${F.badge(t.done ? '已完成' : t.due < F.today ? '已逾期' : '待跟进', t.done ? 'green' : 'amber')}<small class="u-t3">${t.due}</small></div><p class="u-mt2">${e(t.title)}</p>${!t.done && F.canWrite(w) ? `<div class="u-mt2">${F.button('标记完成', 'task', t.id)}</div>` : ''}</div>`).join('') : `<div class="fp-empty fp-empty--slim"><h3>暂无待办任务</h3><p>跟进中产生的下一步会汇聚到这里。</p></div>`}</div>`)}${F.panel('客户档案', `<div class="fp-pad"><dl class="fp-kv"><dt>客户等级</dt><dd>${F.badge(w.grade, 'brand')}</dd><dt>联系人</dt><dd>${e(w.contact)}</dd><dt>联系职位</dt><dd>信息技术负责人</dd><dt>归属销售</dt><dd>${e(F.name(w.sales))}</dd><dt>客户池</dt><dd>${pool}</dd><dt>确权来源</dt><dd>${e(entitlementText(w))}</dd><dt>当前商机</dt><dd>${w.entitlements?.opportunities?.length ? `${w.entitlements.opportunities.length} 条` : '无本人确权商机'}</dd><dt>冻结原因</dt><dd>${frozen ? e(w.lifecycleEvents?.find(event => event.type === 'frozen')?.reason || '确权已结束') : '—'}</dd></dl></div>`)}</aside></div><button type="button" class="fp-assistant-fab" data-open-assistant aria-label="空间助手：围绕本空间问答" title="空间助手">${SC.icon('sparkles', 15)}<span>空间助手</span></button>`;
       const target = root.querySelector('[data-tab-body]');
       if (tab === 'overview') target.innerHTML = renderOverview(w, state);
       if (tab === 'customer') target.innerHTML = renderCustomer(w, state);
@@ -496,7 +902,7 @@
           return `<tr data-placement-row="${e(placement.id)}" data-placement-status="${e(placement.status)}">
             <td><strong>${e(recording ? recording.title : placement.recording)}</strong><small>${e(placement.recording)} · 归位 ${e(placement.at)}</small></td>
             <td>${e(opp ? opp.name : placement.opportunityId || '—')}</td>
-            <td>${F.badge(meta[0], meta[1])}${placement.status === 'failed' ? `<small>${e(placement.failReason)}</small>` : placement.status === 'waiting_transcript' ? '<small>转写可用后自动开始更新</small>' : ''}</td>
+            <td>${F.badge(meta[0], meta[1])}${placement.status === 'failed' ? `<small>${e(placement.failReason)}</small>` : placement.status === 'updating' ? '<small>正在使用三方已同步的原文更新，可稍后查看</small>' : ''}</td>
             <td data-behavior-status="${e(behavior ? behavior.status : 'none')}">${behavior ? F.badge(behaviorMeta[0], behaviorMeta[1]) : '<span class="u-t3">未生成</span>'}</td>
             <td>${changeLink}${behavior ? F.button('查看行为记录', 'behavior-open', behavior.id) : ''}${F.button('查看原文', 'source', 'meeting:' + placement.recording)}<a href="${F.link('meeting-center', { meeting: placement.recording })}">录音管理</a>${cancel}</td></tr>`;
         });
@@ -506,24 +912,15 @@
       }
       if (tab === 'followup' && sub === 'solutions') {
         const rows = F.records('solutions').filter(r => r.space === w.id && (!r.withdrawn || (F.role === 'SOL' && r.author === F.actor.id)));
-        target.innerHTML = rows.length ? rows.map(r => `<article class="fp-event"><div class="fp-actions"><strong>${e(r.title)}</strong>${F.solutionStatus(r).key === 'withdrawn' ? F.badge('已撤回', 'neutral') : F.badge(r.reply ? '已回复' : r.read ? '已读' : '未读', r.reply ? 'green' : 'brand')}</div><p>${e(r.body)}</p><div class="fp-solution-assets">${(r.attachments || []).map(file => `<span class="fp-file-chip">${e(file.name)} <small>${e(file.size || '')}</small></span>`).join('')}${r.externalLink ? `<a class="fp-link-chip" href="${e(r.externalLink)}" target="_blank" rel="noreferrer">外部链接</a>` : ''}</div><small>${e(F.name(r.author))} · ${e(r.date)}${r.readAt ? ' · 已读 ' + e(r.readAt) : ''}</small>${r.reply ? `<div class="fp-callout u-mt3">销售回复：${e(r.reply)}<small class="fp-sub">${r.replyRead ? '方案人员已读' : '方案人员未读'}</small></div>` : ''}<div class="fp-actions u-mt3">${F.role === 'SLS' ? F.button('查看并回复', 'solution', r.id) : F.button('查看详情', 'solution', r.id)}</div></article>`).join('') : F.empty('当前空间尚未收到方案。');
+        target.innerHTML = rows.length ? rows.map(r => `<article class="fp-event"><div class="fp-actions"><strong>${e(r.title)}</strong>${F.solutionStatus(r).key === 'withdrawn' ? F.badge('已撤回', 'neutral') : F.badge(r.reply ? '已回复' : r.read ? '已读' : '未读', r.reply ? 'green' : 'brand')}</div><p>${e(r.body)}</p><div class="fp-solution-assets">${(r.attachments || []).length ? `<ul class="fp-file-list fp-file-list--compact">${(r.attachments || []).map(file => { const ext = F.solutionFileExt(file.name) || 'file'; return `<li class="fp-file-row" data-attachment-row="${e(ext)}"><span class="fp-file-ext">${e(ext)}</span><span class="fp-file-name">${e(file.name)}</span><small class="fp-file-size">${e(file.size || '')}</small></li>`; }).join('')}</ul>` : ''}${r.externalLink ? `<a class="fp-link-chip" href="${e(r.externalLink)}" target="_blank" rel="noreferrer">外部链接</a>` : ''}</div><small>${e(F.name(r.author))} · ${e(r.date)}${r.readAt ? ' · 已读 ' + e(r.readAt) : ''}</small>${r.reply ? `<div class="fp-callout u-mt3">销售回复：${e(r.reply)}<small class="fp-sub">${r.replyRead ? '方案人员已读' : '方案人员未读'}</small></div>` : ''}<div class="fp-actions u-mt3">${F.role === 'SLS' ? F.button('查看并回复', 'solution', r.id) : F.button('查看详情', 'solution', r.id)}</div></article>`).join('') : F.empty('当前空间尚未收到方案。');
       }
       const syncUrl = () => history.replaceState(null, '', F.link('followup-workbench', { space: spaceId, tab, ...(tab === 'followup' ? { sub } : {}) }));
       root.querySelector('[name=space]').onchange = event => { spaceId = event.target.value; syncUrl(); draw(); };
       root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; syncUrl(); draw(); });
       root.querySelectorAll('[data-subtab]').forEach(b => b.onclick = () => { sub = b.dataset.subtab; syncUrl(); draw(); });
-      // 空间助手自由提问：与快捷问题同一判定链路，无依据时不编造答案。
-      const qaForm = target.querySelector('[data-qa-form]');
-      if (qaForm) qaForm.addEventListener('submit', event => {
-        event.preventDefault();
-        const question = String(qaForm.elements.question.value || '').trim();
-        if (!question) return;
-        try {
-          const result = F.askSpace(spaceId, question);
-          draw();
-          SC.toast(result.hasEvidence ? '已按当前空间上下文作答。' : '当前空间没有可用依据，未生成推测答案。', result.hasEvidence ? 'ok' : 'bad');
-        } catch (error) { SC.toast(error.message, 'bad'); }
-      });
+      // 更新入口与空间助手：两个悬浮/顶栏入口在每次重画后重新挂接；抽屉内部各自绑定事件。
+      root.querySelector('[data-open-updates]')?.addEventListener('click', openUpdates);
+      root.querySelector('[data-open-assistant]')?.addEventListener('click', openAssistant);
     }
     F.bind(root, {
       followup: id => F.followupForm(id, draw), weekly: id => F.weeklyReviewForm(id, draw),
@@ -533,35 +930,21 @@
       'behavior-open': id => openBehavior(id),
       'space-retry': id => { F.retrySpace(id); draw(); SC.toast('空间内容已恢复为就绪；生命周期状态保持不变。', 'ok'); },
       source: ref => openSource(ref),
-      'goto-overview': () => { tab = 'overview'; draw(); },
-      'changes-all': () => {
-        const space = F.space(spaceId);
-        const changes = F.changesOf(spaceId);
-        F.drawer('客户信息变化历史 · ' + space.customer, `<div class="fp-stack" data-change-history>${changes.map(change => changeCard(change, space)).join('') || '<p class="u-t3">暂无变化记录。</p>'}</div>`, mask => F.bind(mask, { source: ref => openSource(ref) }));
-      },
-      ask: question => { const result = F.askSpace(spaceId, question); draw(); SC.toast(result.hasEvidence ? '已按当前空间上下文作答。' : '当前空间没有可用依据，未生成推测答案。', result.hasEvidence ? 'ok' : 'bad'); },
+      'change-open': id => openChangeDetail(id),
       // R10 从空间侧反向关联录音：与录音管理侧归位等价，同样必须指定本空间的一条商机。
       'placement-add': id => { const space = F.space(id); if (space) openPlacement(space); },
       'placement-cancel': id => { try { F.cancelPlacement(id); draw(); SC.toast('已取消该条归位，录音与其他归位不受影响。', 'ok'); } catch (error) { SC.toast(error.message, 'bad'); } },
-      'placement-change': id => {
-        const space = F.space(spaceId);
-        const change = space && F.changesOf(spaceId).find(item => item.id === id);
-        if (!change) { SC.toast('该次变化不在当前可见范围。', 'bad'); return; }
-        F.drawer('本次变化详情 · ' + change.id, `<div class="fp-stack" data-change-detail>${changeCard(change, space)}</div>`, mask => F.bind(mask, { source: ref => openSource(ref) }));
-      },
+      'placement-change': id => openChangeDetail(id),
       'doc-upload': id => { const space = F.space(id); if (space) openUpload(space); },
-      'doc-retry': id => { F.retryDocument(id); draw(); SC.toast('该份资料已重新挂载，同批其他结果未受影响。', 'ok'); },
+      'doc-retry': id => { F.retryDocument(id); draw(); SC.toast(F.role === 'MGR' ? '该份资料已重新挂载，并已触发全部内容更新。' : '该份资料已重新挂载，同批其他结果未受影响。', 'ok'); },
+      'content-refresh': id => { F.refreshSpaceContent(id); draw(); SC.toast('已按当前确权范围重装全部内容层。', 'ok'); },
       task: id => { F.mutate('完成跟进任务', s => { const t = s.tasks.find(t => t.id === id); if (!t || !F.canWrite(F.space(t.space, s))) throw Error('当前任务不可操作。'); t.done = true; }); draw(); SC.toast('任务已完成', 'ok'); }
     });
     draw();
     if (SC.param('solution')) F.solutionDetail(SC.param('solution'), draw);
     // R12：客户更新类提醒直达对应那次变化详情，而不是只落到最新概览。
     const changeParam = SC.param('change');
-    if (changeParam) {
-      const space = F.space(spaceId);
-      const change = space && F.changesOf(spaceId).find(item => item.id === changeParam);
-      if (change) F.drawer('本次变化详情 · ' + change.id, `<div class="fp-stack" data-change-detail>${changeCard(change, space)}</div>`, mask => F.bind(mask, { source: ref => openSource(ref) }));
-    }
+    if (changeParam) openChangeDetail(changeParam);
     // R15：行为记录直达，打开对应记录详情抽屉。
     const behaviorParam = SC.param('behavior');
     if (behaviorParam) openBehavior(behaviorParam);

@@ -9,8 +9,13 @@
     <a class="${active === 'feedback' ? 'is-active' : ''}" href="${F.link('solution-feedback')}">反馈看板</a>
   </nav>`;
 
+  /** 方案附件按类型分行展示，便于一次推送里同时核对 Word / PDF / PPT / Markdown / Excel。 */
   const solutionAttachments = record => {
-    const attachments = (record.attachments || []).map(file => `<span class="fp-file-chip">${e(file.name)} <small>${e(file.size || '')}</small></span>`).join('');
+    const files = record.attachments || [];
+    const attachments = files.length ? `<ul class="fp-file-list fp-file-list--compact">${files.map(file => {
+      const ext = F.solutionFileExt(file.name) || 'file';
+      return `<li class="fp-file-row" data-attachment-row="${e(ext)}"><span class="fp-file-ext">${e(ext)}</span><span class="fp-file-name">${e(file.name)}</span><small class="fp-file-size">${e(file.size || '')}</small></li>`;
+    }).join('')}</ul>` : '';
     const link = record.externalLink ? `<a class="fp-link-chip" href="${e(record.externalLink)}" target="_blank" rel="noreferrer">打开外部链接</a>` : '';
     return attachments || link ? `<div class="fp-solution-assets">${attachments}${link}</div>` : '<span class="u-t3">无附件或外部链接</span>';
   };
@@ -26,18 +31,39 @@
     return events.length ? `<div class="fp-event-summary">${events.slice(-4).map(event => `<span>${e(labels[event.type] || event.type)} · ${e(event.at || '')}</span>`).join('')}</div>` : '<span class="u-t3">暂无操作事件</span>';
   }
 
+  function spaceStatusRail(space) {
+    if (space.state === 'frozen') return 'frozen';
+    if (space.readiness === 'failed') return 'failed';
+    if (space.readiness === 'updating') return 'updating';
+    return 'ready';
+  }
+
+  function spaceStatusBadges(space) {
+    if (space.state === 'frozen') return F.badge('已冻结 · 只读', 'neutral');
+    if (space.readiness === 'failed') return F.badge('内容失败', 'amber');
+    if (space.readiness === 'updating') return F.badge('更新中', 'brand');
+    return '';
+  }
+
   function openSpacePreview(spaceId, done) {
     const state = F.load();
     const space = F.space(spaceId, state);
     if (!space) { SC.toast('该空间已不在当前承接范围内。', 'bad'); return; }
     const frozen = space.state === 'frozen';
+    const entitlement = space.entitlementType === 'customer_only' ? '客户级确权' : '客户级 + 商机级';
     const changes = F.changesOf(space.id, state).slice(0, 3);
     const docs = state.documents.filter(doc => doc.space === space.id);
-    F.drawer('空间全景 · ' + space.customer, `<div class="fp-stack" data-workbench-space="${e(space.id)}">
-      <div class="fp-actions">${F.badge(frozen ? '已冻结 · 只读' : '正常空间', frozen ? 'neutral' : 'green')}${F.badge(space.pool, 'brand')}<span class="u-t3">${e(space.id)}</span></div>
-      <dl class="fp-kv"><dt>归属销售</dt><dd>${e(F.name(space.sales))}</dd><dt>经营阶段</dt><dd>${e(space.stage)}</dd><dt>确权来源</dt><dd>${e(space.entitlementType === 'customer_only' ? '客户级确权' : '客户级 + 商机级')}</dd><dt>内容版本</dt><dd>${e(space.lastReadableVersion || '—')}</dd></dl>
-      <section class="fp-panel fp-pad"><h3>当前客户全景</h3><p>${e(space.brief)}</p><p class="fp-hint u-mt2">当前工作台只展示全景摘要；完整五入口内容可进入客户空间查看。</p></section>
-      <section class="fp-panel fp-pad"><h3>最近变化</h3>${changes.length ? `<ul class="fp-compact-list">${changes.map(change => `<li><strong>${e(change.sourceLabel)}</strong><span>${e(change.status === 'done' ? '已更新' : change.status === 'failed' ? '更新失败' : '处理中')} · ${e(change.at)}</span></li>`).join('')}</ul>` : '<p class="u-t3">暂无近期变化。</p>'}</section>
+    const changeItems = changes.length
+      ? `<ul class="fp-compact-list">${changes.map(change => `<li><strong>${e(change.sourceLabel)}</strong><span>${e(change.status === 'done' ? '已更新' : change.status === 'failed' ? '更新失败' : '处理中')} · ${e(change.at)}</span></li>`).join('')}</ul>`
+      : '<p class="fp-empty-inline">近期无有效更新</p>';
+    F.drawer('空间全景 · ' + space.customer, `<div class="fp-stack fp-workbench-preview" data-workbench-space="${e(space.id)}">
+      <div class="fp-workbench-preview-meta">
+        <div class="fp-workbench-preview-who"><strong>${e(F.name(space.sales))}</strong><span>${e(space.customer)}</span></div>
+        <div class="fp-actions">${F.badge(frozen ? '已冻结 · 只读' : '正常空间', frozen ? 'neutral' : 'green')}${F.badge(entitlement, 'brand')}${F.badge(space.pool, 'neutral')}<span class="u-t3">${e(space.id)}</span></div>
+      </div>
+      <dl class="fp-kv"><dt>经营阶段</dt><dd>${e(space.stage)}</dd><dt>确权来源</dt><dd>${e(entitlement)}</dd><dt>内容版本</dt><dd>${e(space.lastReadableVersion || '—')}</dd></dl>
+      <section class="fp-workbench-brief"><h3>当前客户全景</h3><p>${e(space.brief)}</p><p class="fp-hint">当前工作台只展示全景摘要；完整五入口内容可进入客户空间查看。</p></section>
+      <section class="fp-workbench-changes"><h3>最近变化</h3>${changeItems}</section>
       <div class="fp-actions"><a class="btn btn--primary" href="${F.link('followup-workbench', { space: space.id, tab: 'overview' })}">进入完整客户空间</a>${!frozen && F.canUpload(space, state) ? F.button('补充外部资料', 'workbench-upload', space.id) : '<span class="fp-readonly">冻结空间不开放资料写入</span>'}</div>
       <p class="fp-hint">当前空间已有 ${docs.length} 份资料；资料会逐份校验并触发概览更新。</p>
     </div>`, (mask) => F.bind(mask, { 'workbench-upload': id => openWorkbenchUpload(id, done) }));
@@ -47,33 +73,23 @@
     const state = F.load();
     const space = F.space(spaceId, state);
     if (!space || !F.canUpload(space, state)) { SC.toast('当前空间不可补充资料。', 'bad'); return; }
-    const samples = F.documentSamples;
-    F.drawer('补充外部资料 · ' + space.customer, `<form class="fp-form" data-workbench-upload>
-      <div class="fp-callout">资料会写入 <strong>${e(space.customer)}</strong> 的当前空间，不与同客户其他销售空间共享。</div>
-      <fieldset class="fp-checks"><legend>选择资料（可多选）</legend>${samples.map(sample => `<label><input type="checkbox" name="docs" value="${e(sample.key)}"><span>${e(sample.name)}<small>${e(sample.size)}</small></span></label>`).join('')}</fieldset>
-      <p class="fp-error" role="alert"></p><footer class="fp-form-foot"><span class="u-t3">支持 .md；每份文件单独返回结果。</span><button type="submit" class="btn btn--primary">开始处理</button></footer>
-    </form>`, (mask, close) => {
-      mask.querySelector('form').onsubmit = event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const keys = [...form.querySelectorAll('[name=docs]:checked')].map(node => node.value);
-        try {
-          if (!keys.length) throw Error('至少选择一份资料。');
-          const results = F.uploadDocuments(spaceId, keys);
-          close(); done?.();
-          F.drawer('资料处理结果', `<div class="fp-stack"><p class="fp-hint">成功结果不会被单份失败覆盖；失败资料可在客户空间资料 Tab 单份重试。</p><ul class="fp-upload-results">${results.map((item, index) => `<li data-upload-result="${e(item.status)}"><span class="fp-upload-index">${index + 1}</span><div><strong>${e(item.name)}</strong>${F.badge(item.status === 'success' ? '已挂载' : item.status === 'duplicate' ? '重复资料' : '处理失败', item.status === 'success' ? 'green' : item.status === 'duplicate' ? 'neutral' : 'amber')}<small>${e(item.reason || item.note || '已进入资料处理队列。')}</small></div></li>`).join('')}</ul></div>`);
-        } catch (error) { form.querySelector('.fp-error').textContent = error.message; }
-      };
-    });
+    F.documentUploadForm(space, done);
   }
 
-  /** R07 方案人员工作台：客户去重聚合，展开客户后再进入销售空间。 */
+  /**
+   * R07 方案人员工作台：承接调度台。
+   * 「今日有更新」只看当天有效变化、客户去重；周期只驱动跟进数和方案已读/未读。
+   * 搜索与展开只重绘客户列表，避免冲掉搜索栏。
+   */
   F.views['solution-workbench'] = function (root) {
     let period = SC.param('period') || 'today';
     let query = {};
     const expanded = new Set();
     const periodStart = value => value === 'month' ? '2026-09-01' : value === 'week' ? '2026-09-09' : F.today;
     const inPeriod = (date, value = period) => String(date || '').slice(0, 10) >= periodStart(value);
+    const isTodayChange = change => String(change.at || '').slice(0, 10) === F.today && change.status !== 'nochange';
+    const periodLabel = value => value === 'week' ? '本周' : value === 'month' ? '本月' : '本日';
+    const industryTone = ['var(--brand-500)', 'var(--brand-300)', 'var(--green-300)', 'var(--amber-300)', 'var(--gray-400)'];
     const groups = () => {
       const state = F.load();
       const map = new Map();
@@ -82,31 +98,81 @@
         map.get(space.customerId).spaces.push(space);
       });
       return [...map.values()].map(group => {
-        group.updated = group.spaces.some(space => F.changesOf(space.id, state).some(change => inPeriod(change.at) && change.status !== 'nochange'));
+        group.updated = group.spaces.some(space => F.changesOf(space.id, state).some(isTodayChange));
         group.latest = group.spaces.flatMap(space => F.changesOf(space.id, state)).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0]?.at || '';
         return group;
       }).filter(group => !query.q || `${group.customer} ${group.industry} ${group.customerId}`.includes(query.q.trim())).sort((a, b) => query.sort === 'name' ? a.customer.localeCompare(b.customer, 'zh-CN') : String(b.latest).localeCompare(String(a.latest)));
     };
+    function renderRows() {
+      const listed = groups();
+      const total = new Set(F.visible().map(space => space.customerId)).size;
+      const result = root.querySelector('[data-workbench-results]');
+      if (!result) return;
+      result.dataset.rowCount = String(listed.length);
+      result.dataset.totalCount = String(total);
+      result.dataset.countLabel = '个客户';
+      result.innerHTML = listed.map(group => {
+        const open = expanded.has(group.customerId);
+        const spacesHtml = open ? `<div class="fp-customer-spaces">${group.spaces.map(space => {
+          const rail = spaceStatusRail(space);
+          const badges = spaceStatusBadges(space);
+          return `<div class="fp-space-row is-${rail}"><div class="u-grow"><div class="fp-space-row-title"><strong>${e(F.name(space.sales))}</strong>${badges}</div><small>${e(space.pool)} · ${e(space.id)}</small></div><div class="fp-space-row-actions"><button type="button" class="fp-text-action is-main" data-action="space-preview" data-value="${e(space.id)}">查看全景</button><a class="fp-text-action" href="${F.link('followup-workbench', { space: space.id, tab: 'overview' })}">打开空间</a></div></div>`;
+        }).join('')}</div>` : '';
+        return `<article class="fp-customer-row ${open ? 'is-expanded' : ''} ${group.updated ? 'has-update' : ''}" data-customer-row="${e(group.customerId)}"><button type="button" class="fp-customer-toggle" data-action="customer-expand" data-value="${e(group.customerId)}" aria-expanded="${open}"><span class="fp-customer-chevron" aria-hidden="true">${open ? '⌄' : '›'}</span><span class="u-grow"><strong>${e(group.customer)}</strong><small>${e(group.industry)} · ${group.spaces.length} 个销售空间</small></span>${group.updated ? '<span class="fp-update-pill"><i aria-hidden="true"></i>今日有更新</span>' : ''}</button>${spacesHtml}</article>`;
+      }).join('') || F.empty(query.q ? '未找到匹配的承接客户，请调整搜索条件。' : '当前没有承接客户，联系超管配置承接池。', query.q ? '未找到客户' : '暂无承接客户');
+      root.querySelectorAll('[data-action="customer-expand"]').forEach(button => button.setAttribute('aria-label', `${button.getAttribute('aria-expanded') === 'true' ? '收起' : '展开'}客户 ${button.closest('[data-customer-row]').querySelector('strong').textContent}`));
+    }
     function draw() {
       const state = F.load();
       const spaces = F.visible();
       const groupsAll = [...new Map(spaces.map(space => [space.customerId, space])).values()];
       const followups = F.records('followups', state).filter(record => inPeriod(record.date));
-      const changes = spaces.filter(space => F.changesOf(space.id, state).some(change => inPeriod(change.at) && change.status !== 'nochange'));
+      const todayUpdated = new Set(spaces.filter(space => F.changesOf(space.id, state).some(isTodayChange)).map(space => space.customerId));
       const authored = F.records('solutions', state).filter(record => record.author === F.actor.id && !record.withdrawn && inPeriod(record.date));
+      const readCount = authored.filter(record => record.read).length;
+      const unreadCount = authored.filter(record => !record.read).length;
       const industries = [...new Set(spaces.map(space => space.industry))].map(industry => [industry, groupsAll.filter(space => space.industry === industry).length]);
       const totalIndustry = Math.max(1, groupsAll.length);
-      root.innerHTML = solutionNav('workbench') + `<div class="fp-callout fp-workbench-hero"><div><strong>按客户组织方案工作</strong><p>先定位承接客户，再展开其下销售空间；工作台只提示变化，完整客户全景在空间内查看。</p></div><div class="fp-actions"><a class="btn btn--primary" href="${F.link('solution-push')}">发起方案推送</a><a class="btn" href="${F.link('solution-feedback')}">查看反馈看板</a></div></div>` + F.metrics([['承接客户', new Set(spaces.map(space => space.customerId)).size, '客户去重'], ['今日有更新', new Set(changes.map(space => space.customerId)).size, '同客户多个空间只计 1'], ['跟进记录', followups.length, period === 'today' ? '本日' : period === 'week' ? '本周' : '本月'], ['方案已读 / 未读', `${authored.filter(record => record.read).length} / ${authored.filter(record => !record.read).length}`, '本人推送且未撤回']]) + `<div class="fp-workbench-grid"><section class="fp-panel"><header class="fp-panel-head"><div><h2>承接客户</h2><p class="fp-hint">客户只出现一次，展开后查看销售空间。</p></div><div class="fp-actions">${F.field('统计周期', 'period', period, 'select', [['today', '本日'], ['week', '本周'], ['month', '本月']])}</div></header>${F.searchbar('搜索客户名称 / 行业', F.field('排序', 'sort', query.sort || 'updated', 'select', [['updated', '最近更新'], ['name', '客户名称']]))}<div data-workbench-results></div></section><aside class="fp-panel fp-pad"><h2>行业客户占比</h2><p class="fp-hint">按承接客户去重计算，缺失行业单独展示。</p><div class="fp-industry-list">${industries.map(([industry, count]) => `<div class="fp-bar-row"><span>${e(industry || '行业缺失')}</span><div class="fp-bar"><i style="width:${count / totalIndustry * 100}%"></i></div><strong>${Math.round(count / totalIndustry * 100)}%</strong></div>`).join('') || '<p class="u-t3">暂无承接客户。</p>'}</div><div class="fp-callout u-mt4">${changes.length ? `有 ${new Set(changes.map(space => space.customerId)).size} 个客户在${period === 'today' ? '今日' : period === 'week' ? '本周' : '本月'}发生有效更新。` : '当前周期没有有效更新，列表不会虚构提醒。'}</div></aside></div>`;
-      const result = root.querySelector('[data-workbench-results]');
-      const rows = groups().map(group => `<article class="fp-customer-row ${expanded.has(group.customerId) ? 'is-expanded' : ''}" data-customer-row="${e(group.customerId)}"><button type="button" class="fp-customer-toggle" data-action="customer-expand" data-value="${e(group.customerId)}" aria-expanded="${expanded.has(group.customerId)}"><span class="fp-customer-chevron" aria-hidden="true">${expanded.has(group.customerId) ? '⌄' : '›'}</span><span class="fp-avatar">${e(group.customer.slice(0, 1))}</span><span class="u-grow"><strong>${e(group.customer)}</strong><small>${e(group.industry)} · ${group.spaces.length} 个销售空间</small></span>${group.updated ? F.badge('今日有更新', 'brand') : '<span class="u-t3">暂无本期更新</span>'}</button>${expanded.has(group.customerId) ? `<div class="fp-customer-spaces">${group.spaces.map(space => `<div class="fp-space-row"><div class="u-grow"><div class="fp-actions"><strong>${e(F.name(space.sales))}</strong>${F.badge(space.state === 'frozen' ? '已冻结 · 只读' : '正常', space.state === 'frozen' ? 'neutral' : 'green')}${F.badge(space.readiness === 'failed' ? '内容失败' : space.readiness === 'updating' ? '更新中' : '已就绪', space.readiness === 'failed' ? 'amber' : space.readiness === 'updating' ? 'brand' : 'green')}</div><small>${e(space.pool)} · ${e(space.id)} · ${e(space.brief)}</small></div><div class="fp-actions"><button type="button" class="btn" data-action="space-preview" data-value="${e(space.id)}">查看全景</button><a class="btn" href="${F.link('followup-workbench', { space: space.id, tab: 'overview' })}">打开空间</a></div></div>`).join('')}</div>` : ''}</article>`).join('');
-      result.innerHTML = rows || F.empty(query.q ? '未找到匹配的承接客户，请调整搜索条件。' : '当前没有承接客户，联系超管配置承接池。', query.q ? '未找到客户' : '暂无承接客户');
-      F.handleSearch(root, values => { query = values; draw(); });
-      root.querySelector('[name=period]').onchange = event => { period = event.target.value; draw(); };
-      root.querySelectorAll('[data-action="customer-expand"]').forEach(button => button.setAttribute('aria-label', `${button.getAttribute('aria-expanded') === 'true' ? '收起' : '展开'}客户 ${button.closest('[data-customer-row]').querySelector('strong').textContent}`));
+      const periodHint = periodLabel(period);
+      const industryBar = industries.length
+        ? `<div class="fp-industry-strip" aria-label="行业客户占比">${industries.map(([industry, count], index) => `<i style="width:${count / totalIndustry * 100}%;background:${industryTone[index % industryTone.length]}" title="${e(industry || '行业缺失')} ${Math.round(count / totalIndustry * 100)}%"></i>`).join('')}</div><ul class="fp-industry-legend">${industries.map(([industry, count], index) => `<li><i aria-hidden="true" style="background:${industryTone[index % industryTone.length]}"></i><span>${e(industry || '行业缺失')}</span><strong>${Math.round(count / totalIndustry * 100)}%</strong></li>`).join('')}</ul>`
+        : '<p class="u-t3">暂无承接客户，行业构成为空。</p>';
+      root.innerHTML = solutionNav('workbench') + `<section class="fp-dispatch" data-workbench-strip>
+        <div class="fp-dispatch-head">
+          <button type="button" class="fp-dispatch-anchor" data-action="focus-updated"${todayUpdated.size ? '' : ' disabled'}>
+            <span class="fp-dispatch-pulse" aria-hidden="true"></span>
+            <span class="fp-dispatch-kicker">今日有更新</span>
+            <strong data-today-updated="${todayUpdated.size}">${todayUpdated.size}</strong>
+            <small>当天全景有效更新 · 同客户多空间只计 1</small>
+          </button>
+          <div class="fp-dispatch-metrics">
+            <div class="fp-dispatch-metric"><span>承接客户</span><strong>${groupsAll.length}</strong><small>不随周期 · 客户去重</small></div>
+            <div class="fp-dispatch-metric"><span>跟进记录</span><strong>${followups.length}</strong><small>${e(periodHint)}</small></div>
+            <div class="fp-dispatch-metric"><span>方案已读 / 未读</span><strong>${readCount} / <em class="${unreadCount ? 'is-unread' : ''}">${unreadCount}</em></strong><small>本人推送且未撤回 · ${e(periodHint)}</small></div>
+          </div>
+          <fieldset class="fp-period" aria-label="统计周期">
+            <legend class="fp-sr-only">统计周期</legend>
+            ${[['today', '本日'], ['week', '本周'], ['month', '本月']].map(([value, label]) => `<label class="${period === value ? 'is-active' : ''}"><input type="radio" name="period" value="${value}" ${period === value ? 'checked' : ''}><span>${label}</span></label>`).join('')}
+          </fieldset>
+        </div>
+        <div class="fp-dispatch-mix"><span>行业客户占比</span>${industryBar}<small>按承接客户去重，缺失行业单独展示；不随周期切换。</small></div>
+      </section><section class="fp-panel fp-workbench-board"><header class="fp-panel-head"><div><h2>承接客户</h2><p class="fp-hint">客户只出现一次，展开后查看销售空间。列表只提示今日有更新。</p></div></header>${F.searchbar('搜索客户名称 / 行业', `<span data-search-ignore>${F.field('排序', 'sort', query.sort || 'updated', 'select', [['updated', '最近更新'], ['name', '客户名称']])}</span>`)}<div class="fp-workbench-results" data-workbench-results data-search-count data-count-label="个客户"></div></section>`;
+      renderRows();
+      F.restoreSearch(root, { ...query, sort: query.sort || 'updated' });
+      F.handleSearch(root, values => { query = values; renderRows(); });
+      root.querySelectorAll('[name=period]').forEach(input => {
+        input.onchange = event => { period = event.target.value; draw(); };
+      });
     }
     F.bind(root, {
-      'customer-expand': id => { expanded.has(id) ? expanded.delete(id) : expanded.add(id); draw(); },
-      'space-preview': id => openSpacePreview(id, draw)
+      'customer-expand': id => { expanded.has(id) ? expanded.delete(id) : expanded.add(id); renderRows(); },
+      'space-preview': id => openSpacePreview(id, draw),
+      'focus-updated': () => {
+        const row = root.querySelector('.fp-customer-row.has-update');
+        row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        row?.classList.add('is-flash');
+        setTimeout(() => row?.classList.remove('is-flash'), 900);
+      }
     });
     draw();
   };
@@ -115,13 +181,17 @@
   F.views['solution-push'] = function (root) {
     function draw() {
       const records = F.records('solutions').filter(record => record.author === F.actor.id);
-      root.innerHTML = solutionNav('push') + F.metrics([['可推送空间', F.visible().filter(space => space.state === 'active').length, '承接池内正常空间'], ['本次提交', records.filter(record => record.date.startsWith(F.today)).length, '今日本人提交'], ['已生成记录', records.filter(record => !record.withdrawn).length, '按空间独立记录'], ['待反馈', records.filter(record => !record.withdrawn && !record.reply).length, '未回复方案']]) + `<section class="fp-panel"><header class="fp-panel-head"><div><h2>方案推送</h2><p class="fp-hint">正文是必填项；附件和外部链接会跟随每个空间独立留存。</p></div>${F.button('编辑并推送方案', 'compose', '', true)}</header><div class="fp-pad"><div class="fp-callout">冻结空间不会出现在接收空间列表；推送完成后每个空间都有独立的已读、回复、撤回和催办状态。</div></div>${F.table(['方案 / 空间', '接收销售', '推送时间', '内容资产', '当前状态', '操作'], records.filter(record => !record.withdrawn).map(record => { const space = F.space(record.space); return `<tr><td><strong>${e(record.title)}</strong><small>${e(space?.customer || record.space)} · ${e(record.space)}</small></td><td>${e(space ? F.name(space.sales) : '—')}</td><td>${e(record.date)}</td><td>${solutionAttachments(record)}</td><td>${solutionStatus(record)}</td><td>${F.button('查看详情', 'detail', record.id)}</td></tr>`; }), { caption: '方案推送记录', emptyMessage: '还没有方案推送记录。点击“编辑并推送方案”开始。', countLabel: '条方案', compact: true })}</section>`;
+      root.innerHTML = solutionNav('push') + F.metrics([['可推送空间', F.visible().filter(space => space.state === 'active').length, '承接池内正常空间'], ['本次提交', records.filter(record => record.date.startsWith(F.today)).length, '今日本人提交'], ['已生成记录', records.filter(record => !record.withdrawn).length, '按空间独立记录'], ['待反馈', records.filter(record => !record.withdrawn && !record.reply).length, '未回复方案']]) + `<section class="fp-panel"><header class="fp-panel-head"><div><h2>方案推送</h2><p class="fp-hint">正文是必填项；同一条方案可同时挂 Word、PDF、PPT、Markdown、Excel，附件和外链会跟随每个空间独立留存。</p></div>${F.button('编辑并推送方案', 'compose', '', true)}</header><div class="fp-pad"><div class="fp-callout">冻结空间不会出现在接收空间列表；推送完成后每个空间都有独立的已读、回复、撤回和催办状态。</div></div>${F.table(['方案 / 空间', '接收销售', '推送时间', '内容资产', '当前状态', '操作'], records.filter(record => !record.withdrawn).map(record => { const space = F.space(record.space); return `<tr><td><strong>${e(record.title)}</strong><small>${e(space?.customer || record.space)} · ${e(record.space)}</small></td><td>${e(space ? F.name(space.sales) : '—')}</td><td>${e(record.date)}</td><td>${solutionAttachments(record)}</td><td>${solutionStatus(record)}</td><td>${F.button('查看详情', 'detail', record.id)}</td></tr>`; }), { caption: '方案推送记录', emptyMessage: '还没有方案推送记录。点击“编辑并推送方案”开始。', countLabel: '条方案', compact: true })}</section>`;
     }
     F.bind(root, { compose: () => F.solutionForm('', draw), detail: id => F.solutionDetail(id, draw) });
     draw();
   };
 
-  /** R08 反馈看板：以本人推送为口径，保留撤回记录并显式展示催办条件。 */
+  /**
+   * R08 反馈看板：以本人推送为口径，保留撤回记录并显式展示催办条件。
+   * 六列各服务一个判断——方案去向、接收人、推送与阅读、反馈到哪一步、催办是否可用、还能做什么；
+   * 状态与不可催办原因留在各自的数据列，操作列只承载动作。
+   */
   F.views['solution-feedback'] = function (root) {
     let tab = SC.param('tab') || 'all';
     let query = {};
@@ -145,13 +215,31 @@
       const rows = filtered().map(record => {
         const state = F.load();
         const space = F.space(record.space, state) || (record.withdrawn ? state.spaces.find(item => item.id === record.space) : null);
-        const status = F.solutionStatus(record);
         const canRemind = !record.withdrawn && !record.reply && space?.state === 'active';
-        const remindText = record.remindedAt ? `已催办 ${record.remindCount || 0} 次 · ${e(record.remindedAt)}` : '尚未催办';
-        const remindAction = canRemind ? F.button('催办', 'remind', record.id) : record.reply ? '<span class="u-t3">已回复，无需催办</span>' : record.withdrawn ? '<span class="u-t3">撤回记录</span>' : '<span class="u-t3">空间冻结</span>';
-        return `<tr><td><strong>${e(record.title)}</strong><small>${e(space?.customer || record.space)} · ${e(record.space)}</small></td><td>${e(space ? F.name(space.sales) : '—')}</td><td>${e(record.date)}<small>${record.readAt ? '已读 ' + e(record.readAt) : record.withdrawn ? '—' : `未读 ${F.solutionUnreadDays(record)} 天`}</small></td><td>${solutionStatus(record)}${record.reply ? `<small>${e(record.reply)}</small>` : ''}</td><td>${e(remindText)}</td><td>${F.button('查看详情', 'detail', record.id)}${space && !record.withdrawn ? `<a href="${F.link('followup-workbench', { space: space.id, tab: 'solutions', solution: record.id })}">回到空间</a>` : ''}${remindAction}</td></tr>`;
+        // 「不可催办原因」与催办次数同列：R08 4.3 要求达到条件限制时给出不可催办的原因。
+        // 放在催办列而不是操作列，操作列就只剩动作，不必一半是按钮、一半是一句状态说明。
+        const remindReason = record.withdrawn ? '已撤回，不进入待催办' : record.reply ? '已回复，无需催办' : space?.state === 'frozen' ? '空间已冻结，不可催办' : '';
+        const remindCell = record.remindedAt
+          ? `<strong>已催办 ${Number(record.remindCount || 0)} 次</strong><small>最近 ${e(record.remindedAt)}</small>`
+          : `<span class="u-t3">尚未催办</span>${remindReason ? `<small>${e(remindReason)}</small>` : ''}`;
+        // 操作列只放动作，且统一为文字动作（与 R01 人员对应表同一套语言）：
+        // 主操作是查看详情（每行都有），回到空间满足「点击可返回原空间」，催办只在符合条件时出现。
+        const actions = F.rowActions(
+          F.linkAction('查看详情', 'detail', record.id, true),
+          space && !record.withdrawn ? `<a class="fp-link-action" href="${F.link('followup-workbench', { space: space.id, tab: 'solutions', solution: record.id })}">回到空间</a>` : '',
+          canRemind ? F.linkAction('催办', 'remind', record.id) : ''
+        );
+        return `<tr><td><strong>${e(record.title)}</strong><small>${e(space?.customer || record.space)} · ${e(record.space)}</small></td><td>${e(space ? F.name(space.sales) : '—')}</td><td>${e(record.date)}<small>${record.readAt ? '已读 ' + e(record.readAt) : record.withdrawn ? '—' : `未读 ${F.solutionUnreadDays(record)} 天`}</small></td><td>${solutionStatus(record)}${record.reply ? `<small>${e(record.reply)}</small>` : ''}</td><td>${remindCell}</td><td>${actions}</td></tr>`;
       });
-      root.querySelector('[data-feedback-results]').innerHTML = F.table(['方案 / 客户空间', '接收销售', '推送 / 阅读', '反馈状态', '催办记录', '操作'], rows, { caption: '方案反馈看板', emptyMessage: '当前筛选没有方案反馈记录。', countLabel: '条方案', compact: true });
+      // 列宽类显式声明：复合列名推不出布局类，反馈状态既要徽章一行、又要回复摘要能换行。
+      root.querySelector('[data-feedback-results]').innerHTML = F.table([
+        { label: '方案 / 客户空间' },
+        { label: '接收销售' },
+        { label: '推送 / 阅读', className: 'is-date' },
+        { label: '反馈状态', className: 'is-long' },
+        { label: '催办', className: 'is-status' },
+        { label: '操作' }
+      ], rows, { caption: '方案反馈看板', emptyMessage: '当前筛选没有方案反馈记录。', countLabel: '条方案', compact: true, tableClass: 'fp-feedback-table' });
       F.handleSearch(root, values => { query = values; draw(); });
       root.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => { tab = button.dataset.tab; draw(); });
     }

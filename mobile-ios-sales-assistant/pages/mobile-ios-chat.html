@@ -6,7 +6,7 @@
   <title>本人助手 · 工作对话</title>
   <!--
     本人助手对话页 · 销售工作 Agent 设计
-    - 视觉底层与移动端主 UI 同源：#2f6feb 主色、#fafafa/#ffffff 底、系统黑体、12/14 圆角。
+    - 视觉底层与移动端主 UI 同源：token 与 css/base/tokens.css 同名同值（--accent / --bg / --surface / --fg…），图标 24×24 · 1.8 描边。
     - 交互概念：对话是带时间栏的工作条目；工作计划是可折叠的「执行计划」卡（逐步打卡），
       工具调用产出「过程产物/回执」卡，敏感操作先「确认」再执行，引用以脚注回溯来源。
     - 自包含单文件（不引 shared.css），既可被首页 iframe 嵌入，也可独立打开。
@@ -14,37 +14,52 @@
       data-od-id=ios-chat-page/header/body/input、data-chat-field/send/suggestion/feedback。
   -->
   <style>
-    /* ===== 设计 token：与移动端主 UI（css/base/tokens.css）同源 ===== */
+    /* ===== 设计 token：与移动端主 UI css/base/tokens.css 同名同值（自包含单文件，故就地复制一份）；
+       下方 fn-* 规则沿用的短别名（--paper / --ink / --seal…）全部指回这些同名变量 ===== */
     :root {
-      --font-sans: "Microsoft YaHei", "PingFang SC", -apple-system, system-ui, sans-serif;
-      --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
-      --paper: #fafafa; --paper-2: #ffffff;
-      --ink: #111111; --ink-2: #6b6b6b; --ink-3: #9a9a9a;
-      --line: #e5e5e5; --line-2: #efefef;
-      --seal: #2f6feb; --seal-on: #ffffff; --seal-soft: color-mix(in oklab, #2f6feb, #ffffff 92%);
-      --ok: #17a34a; --run: #2f6feb;
-      --r-s: 8px; --r-m: 12px;
-      --sh-1: 0 2px 8px color-mix(in oklab, #111111, transparent 92%);
-      --sh-2: 0 2px 6px color-mix(in oklab, #111111, transparent 90%), 0 16px 38px color-mix(in oklab, #111111, transparent 84%);
-      --ease: cubic-bezier(.2, 0, 0, 1); --ease-spring: cubic-bezier(.34, 1.4, .4, 1);
-      --d-f: 150ms; --d-m: 200ms; --d-s: 360ms;
+      --bg: #fafafa; --surface: #ffffff;
+      --fg: #111111; --muted: #6b6b6b; --muted-2: #9a9a9a;
+      --border: #e5e5e5; --border-soft: #efefef;
+      --accent: #2f6feb; --accent-on: #ffffff;
+      --success: #17a34a; --danger: #dc2626;
+      --font-body: "Microsoft YaHei", "PingFang SC", -apple-system, system-ui, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", monospace;
+      --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px;
+      --elev-raised: 0 2px 8px color-mix(in oklab, var(--fg), transparent 92%);
+      --ease-standard: cubic-bezier(.2, 0, 0, 1); --ease-spring: cubic-bezier(.34, 1.4, .4, 1);
+      --motion-fast: 150ms; --motion-base: 200ms; --motion-slow: 360ms;
+      --icon-xs: 16px; --icon-sm: 18px; --icon-md: 20px;
+      /* 短别名 */
+      --font-sans: var(--font-body);
+      --paper: var(--bg); --paper-2: var(--surface);
+      --ink: var(--fg); --ink-2: var(--muted); --ink-3: var(--muted-2);
+      --line: var(--border); --line-2: var(--border-soft);
+      --seal: var(--accent); --seal-on: var(--accent-on); --seal-soft: color-mix(in oklab, var(--accent), var(--surface) 92%);
+      --ok: var(--success); --run: var(--accent); --bad: var(--danger);
+      --r-s: var(--radius-sm); --r-m: var(--radius-md);
+      --sh-1: var(--elev-raised);
+      --sh-2: 0 2px 6px color-mix(in oklab, var(--fg), transparent 90%), 0 16px 38px color-mix(in oklab, var(--fg), transparent 84%);
+      --ease: var(--ease-standard);
+      --d-f: var(--motion-fast); --d-m: var(--motion-base); --d-s: var(--motion-slow);
+      /* 桌面预览时的机身外框 */
+      --frame-bg: #eceff3; --frame-line: #d7dde6; --frame-shadow: 0 40px 90px color-mix(in oklab, var(--fg), transparent 72%);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
-    body { font-family: var(--font-sans); background: #eceff3; color: var(--ink); -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+    body { font-family: var(--font-sans); background: var(--frame-bg); color: var(--ink); -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
     button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     /* 手机画布：独立打开时桌面浏览器居中显示 430×932 机身；iframe 内（≤430px）自动铺满 */
     .fn-page { position: relative; display: flex; flex-direction: column; height: 100dvh; max-width: 430px; margin: 0 auto; background: var(--paper); overflow: hidden; transition: background var(--d-m); }
     @media (min-width: 560px) and (min-height: 640px) {
-      body { display: grid; place-items: center; background: #eceff3 radial-gradient(1200px 600px at 50% -10%, color-mix(in oklab, #2f6feb, transparent 88%), transparent 60%); }
-      .fn-page { height: min(932px, 96vh); border: 1px solid #d7dde6; border-radius: 34px; box-shadow: 0 40px 90px rgba(17, 24, 39, .28); }
+      body { display: grid; place-items: center; background: var(--frame-bg) radial-gradient(1200px 600px at 50% -10%, color-mix(in oklab, var(--accent), transparent 88%), transparent 60%); }
+      .fn-page { height: min(932px, 96vh); border: 1px solid var(--frame-line); border-radius: 34px; box-shadow: var(--frame-shadow); }
     }
 
     /* ===== 顶栏 ===== */
     .fn-topbar { position: relative; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: color-mix(in oklab, var(--paper) 86%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
     .fn-back { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--ink); background: transparent; }
     .fn-back:active { background: var(--line-2); }
-    .fn-back svg { width: 20px; height: 20px; }
+    .fn-back svg { width: var(--icon-md); height: var(--icon-md); }
     .fn-title strong { display: block; font-size: 16px; font-weight: 600; letter-spacing: .01em; }
     .fn-title span { display: block; margin-top: 1px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; color: var(--ink-3); }
     .fn-branch { margin-left: auto; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper-2); color: var(--ink-2); font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; }
@@ -59,9 +74,10 @@
     .fn-welcome h1 { margin-top: 10px; font-size: 28px; font-weight: 700; line-height: 1.32; letter-spacing: -.01em; }
     .fn-welcome .fn-sub { margin-top: 10px; max-width: 320px; font-size: 13px; line-height: 1.75; color: var(--ink-2); }
     .fn-chips { display: flex; flex-direction: column; gap: 8px; margin-top: 22px; }
+    .fn-run-body .fn-chips { margin-top: 10px; }
     .fn-chip { display: flex; align-items: center; gap: 10px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper-2); color: var(--ink); font-size: 13.5px; text-align: left; box-shadow: var(--sh-1); transition: transform var(--d-f) var(--ease); }
     .fn-chip:active { transform: scale(.98); }
-    .fn-chip > svg { flex: 0 0 auto; color: var(--seal); }
+    .fn-chip > svg { flex: 0 0 auto; width: var(--icon-xs); height: var(--icon-xs); color: var(--seal); }
     .fn-chip small { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); letter-spacing: .04em; }
 
     /* 条目：左侧等宽时间栏，非气泡 */
@@ -69,7 +85,8 @@
     .fn-time { padding-top: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
     .fn-main { min-width: 0; }
     .fn-entry-tools { display: flex; justify-content: flex-end; margin-top: 4px; }
-    .fn-ctx { width: 26px; height: 20px; display: grid; place-items: center; border: 0; border-radius: var(--r-s); background: transparent; color: var(--ink-3); font-family: var(--font-mono); font-size: 13px; letter-spacing: .1em; }
+    .fn-ctx { width: 26px; height: 20px; display: grid; place-items: center; border: 0; border-radius: var(--r-s); background: transparent; color: var(--ink-3); }
+    .fn-ctx svg { width: var(--icon-xs); height: var(--icon-xs); }
     /* 用户条目：右侧浅蓝批注 */
     .fn-user { display: block; }
     .fn-bubble { width: fit-content; max-width: 86%; margin-left: auto; padding: 10px 13px; border: 1px solid color-mix(in oklab, var(--seal), var(--line) 55%); border-radius: 14px 14px 4px; background: color-mix(in oklab, var(--seal), var(--paper-2) 92%); font-size: 15px; line-height: 1.6; box-shadow: var(--sh-1); }
@@ -85,7 +102,7 @@
     .fn-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
     .fn-dot-run { background: var(--run); animation: fn-breathe 1.5s ease-in-out infinite; }
     .fn-dot-done { background: var(--ok); }
-    .fn-dot-fail { background: #dc2626; }
+    .fn-dot-fail { background: var(--bad); }
     .fn-plan-title { display: block; font-size: 13px; font-weight: 600; }
     .fn-plan-no { display: block; margin-top: 1px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); letter-spacing: .06em; }
     .fn-plan-elapsed { margin-left: auto; padding-right: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
@@ -105,14 +122,15 @@
     .fn-step-dur { margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
     .fn-step-detail { display: none; margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--r-s); background: var(--paper); font-size: 12px; line-height: 1.7; color: var(--ink-2); }
     .fn-step-detail b { display: block; margin-bottom: 2px; font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: .12em; color: var(--ink-3); }
+    .fn-step-detail b:not(:first-child) { margin-top: 6px; }
     .fn-step.open .fn-step-detail { display: block; }
-    .fn-step.is-fail .fn-step-name { color: #dc2626; }
+    .fn-step.is-fail .fn-step-name { color: var(--bad); }
     .fn-retry { margin-left: 8px; padding: 3px 10px; border: 1px solid var(--seal); border-radius: 99px; background: var(--seal-soft); color: var(--seal); font-size: 11px; }
     .fn-spin { width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--run); border-radius: 50%; animation: fn-rot .8s linear infinite; }
     .fn-wait { width: 13px; height: 13px; border: 1.5px solid var(--line); border-radius: 50%; }
     .fn-sealcheck { width: 18px; height: 18px; display: grid; place-items: center; border: 1.5px solid var(--seal); border-radius: 50%; color: var(--seal); transform: rotate(-6deg); animation: fn-stamp .38s var(--ease-spring) both; }
-    .fn-sealcheck svg { width: 10px; height: 10px; }
-    .fn-failmark { width: 18px; height: 18px; display: grid; place-items: center; border: 1.5px solid #dc2626; border-radius: 50%; color: #dc2626; font-family: var(--font-mono); font-size: 11px; }
+    .fn-sealcheck svg { width: 12px; height: 12px; }
+    .fn-failmark { width: 18px; height: 18px; display: grid; place-items: center; border: 1.5px solid var(--bad); border-radius: 50%; color: var(--bad); font-family: var(--font-mono); font-size: 11px; }
 
     /* 过程产物 / 回执卡 */
     .fn-receipt { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-top: 2px dashed var(--line); border-radius: 14px; background: var(--paper-2); box-shadow: var(--sh-1); animation: fn-in var(--d-m) var(--ease) both; }
@@ -127,7 +145,7 @@
     .fn-sign dt { padding-top: 1px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
     .fn-sign dd { color: var(--ink); }
     .fn-sign-actions { display: flex; gap: 10px; margin-top: 13px; }
-    .fn-allow { flex: 1; padding: 11px; border: 0; border-radius: 99px; background: var(--seal); color: var(--seal-on); font-size: 14px; font-weight: 600; letter-spacing: .04em; box-shadow: 0 4px 14px color-mix(in oklab, #2f6feb, transparent 68%); transition: transform var(--d-f) var(--ease-spring); }
+    .fn-allow { flex: 1; padding: 11px; border: 0; border-radius: 99px; background: var(--seal); color: var(--seal-on); font-size: 14px; font-weight: 600; letter-spacing: .04em; box-shadow: 0 4px 14px color-mix(in oklab, var(--accent), transparent 68%); transition: transform var(--d-f) var(--ease-spring); }
     .fn-allow:active { transform: scale(.96); }
     .fn-deny { padding: 11px 18px; border: 1px solid var(--line); border-radius: 99px; background: transparent; color: var(--ink-2); font-size: 13px; }
     .fn-sign.stamped .fn-sign-actions { opacity: .35; pointer-events: none; }
@@ -159,14 +177,14 @@
     .fn-field { flex: 1; min-height: 38px; max-height: 120px; resize: none; padding: 9px 13px; border: 1px solid var(--line); border-radius: 19px; outline: 0; background: var(--paper-2); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
     .fn-field:focus { border-color: var(--seal); box-shadow: 0 0 0 3px color-mix(in oklab, var(--seal), transparent 70%); }
     .fn-field::placeholder { color: var(--ink-3); }
-    .fn-send { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--seal); color: var(--seal-on); box-shadow: 0 4px 12px color-mix(in oklab, #2f6feb, transparent 60%); transition: transform var(--d-f) var(--ease-spring), background var(--d-f); }
+    .fn-send { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--seal); color: var(--seal-on); box-shadow: 0 4px 12px color-mix(in oklab, var(--accent), transparent 60%); transition: transform var(--d-f) var(--ease-spring), background var(--d-f); }
     .fn-send:active { transform: scale(.9); }
     .fn-send[data-state="stop"] { background: var(--ink); }
-    .fn-send svg { width: 17px; height: 17px; }
+    .fn-send svg { width: var(--icon-sm); height: var(--icon-sm); }
     .fn-composer-note { margin-top: 7px; font-family: var(--font-mono); font-size: 10.5px; text-align: center; color: var(--ink-3); }
 
     /* 底部弹层（来源 / 消息操作） */
-    .fn-sheet-mask { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; background: rgba(17, 17, 17, .45); animation: fn-fade var(--d-m) both; }
+    .fn-sheet-mask { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; background: color-mix(in oklab, var(--fg), transparent 55%); animation: fn-fade var(--d-m) both; }
     .fn-sheet { width: 100%; max-height: 74%; overflow-y: auto; padding: 8px 18px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; background: var(--paper-2); animation: fn-up var(--d-s) var(--ease) both; }
     .fn-sheet-grab { width: 36px; height: 4px; margin: 4px auto 12px; border-radius: 99px; background: var(--line); }
     .fn-sheet h3 { font-size: 16px; font-weight: 600; }
@@ -175,7 +193,7 @@
     .fn-actions { display: grid; }
     .fn-action { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 4px; border: 0; border-bottom: 1px solid var(--line-2); background: none; color: var(--ink); font-size: 14.5px; text-align: left; }
     .fn-action:last-child { border-bottom: 0; }
-    .fn-action svg { flex: 0 0 auto; width: 17px; height: 17px; color: var(--ink-3); }
+    .fn-action svg { flex: 0 0 auto; width: var(--icon-sm); height: var(--icon-sm); color: var(--ink-3); }
     .fn-action small { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); }
 
     /* 轻提示 */
@@ -368,11 +386,11 @@
     function buildItem(item) {
       let node;
       if (item.role === 'user') {
-        node = el('<section class="fn-entry fn-user" data-id="' + item.id + '"><div class="fn-bubble">' + esc(item.text).replace(/\n/g, '<br>') + '</div><div class="fn-user-meta"><span>' + item.time + '</span><button class="fn-ctx" type="button" data-menu="' + item.id + '" aria-label="消息操作">···</button></div></section>');
+        node = el('<section class="fn-entry fn-user" data-id="' + item.id + '"><div class="fn-bubble">' + esc(item.text).replace(/\n/g, '<br>') + '</div><div class="fn-user-meta"><span>' + item.time + '</span><button class="fn-ctx" type="button" data-menu="' + item.id + '" aria-label="消息操作"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div></section>');
       } else if (item.kind === 'note') {
         node = el('<section class="fn-entry" data-id="' + item.id + '"><div class="fn-time">' + item.time + '</div><div class="fn-main"><div class="fn-note">' + esc(item.text) + '</div></div></section>');
       } else {
-        node = el('<section class="fn-entry" data-id="' + item.id + '"><div class="fn-time">' + item.time + '</div><div class="fn-main"><div class="fn-run-body">' + (item.html || '') + '</div><div class="fn-entry-tools"><button class="fn-ctx" type="button" data-menu="' + item.id + '" aria-label="消息操作">···</button></div></div></section>');
+        node = el('<section class="fn-entry" data-id="' + item.id + '"><div class="fn-time">' + item.time + '</div><div class="fn-main"><div class="fn-run-body">' + (item.html || '') + '</div><div class="fn-entry-tools"><button class="fn-ctx" type="button" data-menu="' + item.id + '" aria-label="消息操作"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div></div></section>');
       }
       item.el = node;
       return node;
@@ -394,7 +412,7 @@
         '<div class="fn-step-row" role="button" tabindex="0" aria-expanded="false"><span class="fn-stamp" data-stamp><i class="fn-wait"></i></span>' +
         '<span><span class="fn-step-name">' + esc(s.tool) + '</span><div class="fn-step-sum">' + esc(s.sum) + '</div></span>' +
         '<span class="fn-step-dur" data-dur></span></div>' +
-        '<div class="fn-step-detail"><b>参数摘要</b>' + esc(s.args) + '<b style="margin-top:6px">结果预览</b><span data-preview>待执行</span></div></div>';
+        '<div class="fn-step-detail"><b>参数摘要</b>' + esc(s.args) + '<b>结果预览</b><span data-preview>待执行</span></div></div>';
     }
     function setStep(plan, i, status, opt) {
       const row = plan.rows[i];
@@ -402,7 +420,7 @@
       if (status === 'run') { row.root.classList.remove('is-fail'); row.stamp.innerHTML = '<i class="fn-spin"></i>'; row.dur.textContent = ''; }
       if (status === 'done') {
         row.root.classList.remove('is-fail');
-        row.stamp.innerHTML = '<span class="fn-sealcheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>';
+        row.stamp.innerHTML = '<span class="fn-sealcheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span>';
         row.dur.textContent = opt.dur || '';
         row.preview.textContent = opt.preview || '';
       }
@@ -449,7 +467,7 @@
           '<div class="fn-plan-head" role="button" tabindex="0" aria-expanded="false"><span class="fn-dot fn-dot-run" data-dot></span>' +
           '<span><span class="fn-plan-title">' + esc(op.title) + '</span><span class="fn-plan-no">' + esc(op.no) + ' · ' + op.steps.length + ' 步 · 点击或上滑展开</span></span>' +
           '<span class="fn-plan-elapsed" data-elapsed>0:00</span>' +
-          '<svg class="fn-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></div>' +
+          '<svg class="fn-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>' +
           '<div class="fn-plan-bar"><i data-bar></i></div>' +
           '<div class="fn-steps">' + op.steps.map(stepHtml).join('') + '</div></div>');
         ctx.el.append(card);
@@ -552,7 +570,7 @@
         ctx.run.answerText = (ctx.run.answerText || '') + plain.join('');
       },
       chips: async (op, ctx) => {
-        ctx.el.append(el('<div class="fn-chips" style="margin-top:10px">' + SUGGESTIONS.map((s) => '<button type="button" class="fn-chip" data-q="' + esc(s.q) + '"><span>' + esc(s.q) + '<small>' + esc(s.sub) + '</small></span></button>').join('') + '</div>'));
+        ctx.el.append(el('<div class="fn-chips">' + SUGGESTIONS.map((s) => '<button type="button" class="fn-chip" data-q="' + esc(s.q) + '"><span>' + esc(s.q) + '<small>' + esc(s.sub) + '</small></span></button>').join('') + '</div>'));
         scrollEnd();
       }
     };

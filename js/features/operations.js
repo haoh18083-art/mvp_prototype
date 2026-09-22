@@ -3,10 +3,12 @@
   'use strict';
   const e = F.e;
   F.views['operations-config'] = function (root) {
-    const options = [...(F.role === 'ADM' ? [['people', '人员管理']] : []), ['model', '模型配置'], ['crm', '销帮帮集成'], ['notify', '消息触达'], ['daily', '晚间日报'], ['openclaw', 'OpenClaw'], ['levels', '客户等级'], ...(F.role === 'ADM' ? [['pools', '承接池配置']] : [])];
+    // 客户等级页已下线：等级说明不再由运营维护，客户等级只作为 CRM 同步来的只读字段在各客户视图展示。
+    const options = [...(F.role === 'ADM' ? [['people', '人员管理']] : []), ['model', '模型配置'], ['crm', '销帮帮集成'], ['notify', '消息触达'], ['daily', '晚间日报'], ['openclaw', 'OpenClaw'], ...(F.role === 'ADM' ? [['pools', '承接池配置']] : [])];
     let tab = SC.param('tab') || 'model';
     if (!options.some(([key]) => key === tab)) tab = 'model';
     let crmView = SC.param('crmView') || 'overview';
+    let mapQuery = {};
     let notifyView = SC.param('notifyView') || 'events';
     let dailyView = SC.param('dailyView') || 'runs';
     let notifyQuery = {};
@@ -20,14 +22,23 @@
     const statusLabel = status => status === 'on' ? '启用中' : '已停用';
     const statusTone = status => status === 'on' ? 'green' : 'neutral';
 
-    const crmViews = [['overview', '同步概览'], ['pending', '待对应人员'], ['unassigned', '未分配商机'], ['errors', '对齐异常'], ['cutover', '存量切换'], ['history', '归属历史']];
+    const crmViews = [['overview', '同步概览'], ['pending', '待对应人员'], ['unassigned', '未分配商机'], ['errors', '对齐异常'], ['history', '归属历史']];
+    if (!crmViews.some(([key]) => key === crmView)) crmView = 'overview';
     const changeLabels = { added: '新增确权', removed: '移除确权', restored: '恢复确权', unchanged: '无变化', pending: '待对应' };
     const changeTones = { added: 'green', removed: 'neutral', restored: 'brand', unchanged: 'neutral', pending: 'amber' };
     const crmStatusLabel = status => ({ completed: '已完成', running: '对齐中', failed: '失败', resolved: '已恢复', retrying: '重试中' }[status] || status || '待处理');
 
-    /** CRM 页签的二级分面，保持运营配置的页签、表格和抽屉交互习惯。 */
+    /**
+     * CRM 分面导航：页签在左，页级动作在右。
+     * 立即对齐 / 查看本轮批次 / 查看连接配置属于整页动作，不能单独占一行压在指标卡上方；
+     * 归属历史已是分面页签，不再重复成按钮。存量切换是上线一次性作业，不提供运营分面。
+     */
+    function crmToolbar() {
+      return `<div class="fp-actions fp-crm-toolbar" data-crm-toolbar>${F.role === 'ADM' ? F.button('立即对齐', 'crm-sync', '', true) : ''}${F.button('查看本轮批次', 'crm-batch')}${F.button('查看连接配置', 'xbb-open')}</div>`;
+    }
+
     function crmSubnav() {
-      return `<nav class="fp-tabs fp-crm-tabs" aria-label="CRM 归属同步分面">${crmViews.map(([key, label]) => `<button type="button" data-action="crm-view" data-value="${key}" class="${crmView === key ? 'is-active' : ''}" aria-pressed="${crmView === key}">${label}</button>`).join('')}</nav>`;
+      return `<div class="fp-crm-nav"><nav class="fp-tabs fp-crm-tabs" aria-label="CRM 归属同步分面">${crmViews.map(([key, label]) => `<button type="button" data-action="crm-view" data-value="${key}" class="${crmView === key ? 'is-active' : ''}" aria-pressed="${crmView === key}">${label}</button>`).join('')}</nav>${crmToolbar()}</div>`;
     }
 
     function crmMetrics(crm) {
@@ -35,27 +46,221 @@
       return `<div class="fp-metrics fp-crm-metrics">${metric('last-sync', '最近同步', crm.lastSyncAt || '暂无', `${crm.trigger || '定时'} · ${crm.currentBatchId || '未生成批次'}`)}${metric('processed', '处理对象', crm.processed || 0, '条 CRM 事实')}${metric('added', '新增 / 恢复', `${crm.added || 0} / ${crm.restored || 0}`, '确权变化')}${metric('removed', '移除确权', crm.removed || 0, '后续新增资格收回')}${metric('retry-next', '下一轮重试', crm.nextRetryAt || '暂无', `${crm.failed || 0} 条异常待处理`)}</div>`;
     }
 
+    /* ---------- R01 CRM 归属同步 ---------- */
+    /** 配置项来源标签：区分数据库配置、环境变量、默认值与 R01 固定口径。 */
+    const xbbSourceLabels = { database: ['数据库配置', 'brand'], env: ['环境变量', 'neutral'], default: ['默认值', 'neutral'], fixed: ['R01 固定口径', 'neutral'] };
+    /** 对应方式标签：自动匹配、人工指定、待对应。 */
+    const mappingModeLabels = { auto: ['自动匹配', 'green'], manual: ['人工指定', 'brand'], none: ['待对应', 'amber'] };
+
+    /** 必填项缺口：连接配置抽屉提示使用同一口径。 */
+    function xbbMissing(xbb = {}) {
+      return [['接口地址', xbb.baseUrl], ['企业 Corp ID', xbb.corpId], ['操作人 User ID', xbb.userId], ['接口 Token', xbb.tokenMasked]]
+        .filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+    }
+
+    /** 连通性检查结果块：抽屉内触发检查后就地刷新，不关闭抽屉。 */
+    function xbbCheckBlock(xbb = {}) {
+      const check = xbb.lastCheck || {};
+      const ok = check.status === 'ok';
+      return `<strong>${ok ? '连通性正常' : '连通性待确认'}</strong>
+        <small>${e(check.at || '尚未检查')} · 耗时 ${e(check.latencyMs || 0)} ms · ${e(check.detail || '尚未发起检查')}</small>
+        <small>最近修改 ${e(xbb.updatedAt || '—')}${xbb.updatedBy ? ' · ' + e(F.name(xbb.updatedBy)) : ''}</small>`;
+    }
+
+    /** 抽屉内的配置字段：标签右侧直接标注该值当前来自哪里。 */
+    function xbbField(label, name, value, sourceKey, type = 'text', readonly = false) {
+      const [text, tone] = xbbSourceLabels[sourceKey] || xbbSourceLabels.default;
+      return `<label class="fp-field fp-xbb-field"><span>${e(label)}${F.badge(text, tone)}</span><input type="${e(type)}" name="${e(name)}" value="${e(value)}"${readonly ? ' readonly' : ''}></label>`;
+    }
+
+    /**
+     * 销帮帮连接配置抽屉：看到＝当前值与每项取值来源；get 到＝缺哪几项必填、缺项会怎样；
+     * 操作＝改值保存、检查连通性。销售运营只读，可查看并检查连通性。
+     * 概览不再保留连接状态条，「查看连接配置」放在页签行「查看本轮批次」之后。
+     */
+    function openXbbDrawer() {
+      const xbb = F.load().xbb || {};
+      const missing = xbbMissing(xbb);
+      const editable = F.role === 'ADM';
+      const fields = [
+        ['接口地址 *', 'baseUrl', xbb.baseUrl, xbb.sources?.baseUrl, 'text'],
+        ['企业 Corp ID *', 'corpId', xbb.corpId, xbb.sources?.corpId, 'text'],
+        ['操作人 User ID *', 'userId', xbb.userId, xbb.sources?.userId, 'text'],
+        ['接口 Token', 'tokenMasked', xbb.tokenMasked, xbb.sources?.token, 'text'],
+        ['SaaS Mark', 'saasMark', xbb.saasMark, xbb.sources?.saasMark, 'number'],
+        ['请求超时（秒）', 'timeoutSeconds', xbb.timeoutSeconds, xbb.sources?.timeoutSeconds, 'number'],
+        ['分页大小（条/页）', 'listPageSize', xbb.listPageSize, xbb.sources?.listPageSize, 'number'],
+        ['重试次数', 'retryCount', xbb.retryCount, xbb.sources?.retryCount, 'number'],
+        ['重试退避（秒）', 'retryBackoffSeconds', xbb.retryBackoffSeconds, xbb.sources?.retryBackoffSeconds, 'number'],
+        ['同步周期（分钟）', 'intervalMinutes', xbb.intervalMinutes, xbb.sources?.intervalMinutes, 'text']
+      ];
+      F.drawer('销帮帮连接配置', `<form class="fp-form" data-xbb-config>
+        ${missing.length
+          ? `<div class="fp-callout fp-callout--warn" data-xbb-missing><strong>缺少必填配置：</strong>${e(missing.join('、'))}。补齐后下一轮同步才会启动，期间保留已有确权。</div>`
+          : '<div class="fp-callout" data-xbb-ready><strong>必填项完整：</strong>接口地址、Corp ID、User ID 与 Token 均已配置，下一轮同步按当前配置读取事实。</div>'}
+        ${editable ? '' : '<div class="fp-callout">当前身份只读：配置修改仅超级管理员可提交，销售运营可查看并检查连通性。</div>'}
+        <div class="fp-config-grid">${fields.map(([label, name, value, source, type]) => xbbField(label, name, value, source, type, !editable || name === 'intervalMinutes')).join('')}</div>
+        <div class="fp-xbb-check" data-xbb-check>${xbbCheckBlock(xbb)}</div>
+        <p class="fp-hint">接口 Token 只保存脱敏值，明文由服务端管理；保存后从下一轮同步开始使用新配置，本轮已生成的确权不变。同步周期按 R01 固定 5 分钟，不提供调整。</p>
+        <p class="fp-error" role="alert"></p>
+        <footer class="fp-form-foot"><span class="u-t3">本地演示数据</span><div class="fp-actions">${['ADM', 'MGR'].includes(F.role) ? '<button type="button" class="btn" data-xbb-check-action>检查连通性</button>' : ''}${editable ? '<button type="submit" class="btn btn--primary">保存配置</button>' : ''}</div></footer>
+      </form>`, (mask, close) => {
+        mask.querySelector('[data-xbb-check-action]')?.addEventListener('click', () => runXbbCheck(mask));
+        const form = mask.querySelector('form');
+        form.onsubmit = event => {
+          event.preventDefault();
+          try {
+            F.saveXbbConfig(Object.fromEntries(new FormData(form)));
+            close(); draw();
+            SC.toast('连接配置已保存，下一轮同步起生效。', 'ok');
+          } catch (error) { form.querySelector('.fp-error').textContent = error.message; }
+        };
+      });
+    }
+
+    /** 检查连通性：只在抽屉内触发，就地刷新检查结果，不关闭抽屉，也不发起真实外网请求。 */
+    function runXbbCheck(mask) {
+      const result = F.checkXbbConnection();
+      if (mask?.isConnected) mask.querySelector('[data-xbb-check]').innerHTML = xbbCheckBlock(F.load().xbb);
+      SC.toast(result.status === 'ok' ? `连通性正常，耗时 ${result.latencyMs} ms。` : result.detail, result.status === 'ok' ? 'ok' : 'bad');
+    }
+
+    /**
+     * R01 人员与系统账号对应：按「看到 → get 到 → 操作」三层组织。
+     * 看到＝对应总览与一行一人一状态；get 到＝未对应原因、推荐账号与涉及客户/商机；
+     * 操作＝行内采用推荐 / 设置对应 / 更换对应，抽屉内先看影响再提交。
+     * 对应关系是待对应人员的处理底账，因此整块只挂在「待对应人员」分面，同步概览只保留本轮同步结果。
+     */
+    function buildMappingRows(state, query = {}) {
+      const crm = state.crm || {};
+      const all = (crm.mappings || []).map(row => {
+        const pending = (crm.pendingMappings || []).find(item => item.id === row.pendingId && item.status === 'pending');
+        const ownerId = pending ? '' : row.ownerId;
+        return { ...row, pending: pending || null, ownerId, status: ownerId ? 'matched' : 'pending' };
+      });
+      const matched = all.filter(row => row.status === 'matched').length;
+      const pendingCount = all.length - matched;
+      const autoCount = all.filter(row => row.status === 'matched' && row.mode === 'auto').length;
+      const manualCount = all.filter(row => row.status === 'matched' && row.mode === 'manual').length;
+      const keyword = String(query.q || '').trim().toLocaleLowerCase('zh-CN');
+      const statusFilter = query.mapStatus || '';
+      /** 操作列的深蓝文字动作：去按钮化后靠字重与颜色区分主次，动作分发仍走 data-action。 */
+      // 主次修饰类用 is-main：is-primary 被表格首列占用（.fp-data-table .is-primary 带 min-width:150px），复用会把文字动作撑成 150px 宽。
+      const linkAction = (label, action, value, primary = false) => `<a class="fp-link-action${primary ? ' is-main' : ''}" href="#" data-action="${e(action)}" data-value="${e(value)}">${e(label)}</a>`;
+      /**
+       * 「详情」是展开控件：静态 aria-label 自带行上下文，展开态用 aria-expanded 表达，
+       * 避免与 F.table 写入的行上下文标签互相覆盖（data-static-label 让表格构建器跳过该控件）。
+       */
+      const detailAction = (crmId, name) => `<a class="fp-link-action" href="#" data-action="crm-map-detail" data-value="${e(crmId)}" data-static-label="true" data-crm-name="${e(name)}" aria-expanded="false" aria-label="详情：${e(name)}">详情</a>`;
+
+      // 主行只保留推荐账号本身：推荐依据全文放 title 与详情行，避免半截截断的文案反而看不懂。
+      const seed = all.map((row, index) => {
+        const owner = row.ownerId ? F.person(row.ownerId) : null;
+        const candidate = row.status === 'pending' && row.suggestOwnerId ? F.person(row.suggestOwnerId) : null;
+        const pendingContext = row.pending || {};
+        const basis = row.suggestBasis || '姓名一致';
+
+        const accountCell = owner
+          ? `<strong>${e(owner.name)}</strong><small>${e(owner.id)} · ${e(roleLabel(owner.role))} · ${e(statusLabel(owner.status))}</small>` // 账号列内容越短，浏览器越会把富余宽度分给「涉及客户 · 商机」列
+          : `<span class="fp-map-empty">未对应</span><small class="fp-map-reason">${e(row.failReason || 'CRM 人员尚未与系统账号对应')}</small>` +
+            (candidate ? `<small class="fp-map-candidate" data-crm-map-candidate="${e(candidate.id)}" title="推荐账号 ${e(candidate.name)}（${e(candidate.id)}）· ${e(basis)}">推荐账号 ${e(candidate.name)}（${e(candidate.id)}）</small>` : '');
+
+        const contextCell = row.status === 'pending'
+          ? (pendingContext.customer
+            ? `<strong>${e(pendingContext.customer)}</strong><small>${e(pendingContext.opportunity || '待补商机')}${pendingContext.opportunityId ? ' · ' + e(pendingContext.opportunityId) : ''}</small>`
+            : '<span class="fp-map-empty">未返回客户</span><small>等待下一轮同步补齐事实</small>')
+          : `${Number(row.customerCount || 0)} 个客户 · ${Number(row.opportunityCount || 0)} 个商机`;
+
+        const statusCell = row.status === 'pending'
+          ? `${F.badge('待对应', 'amber')}<small>等待人工处理</small>`
+          : F.badge('已对应', 'green');
+
+        const actions = row.status === 'pending'
+          ? `${candidate ? linkAction('采用推荐', 'crm-map-accept', row.pendingId, true) : ''}${linkAction('设置对应', 'crm-map', row.pendingId || '', !candidate)}${detailAction(row.crmId, row.crmName)}`
+          : `${linkAction('更换对应', 'crm-map-change', row.crmId)}${detailAction(row.crmId, row.crmName)}`;
+
+        const detailRows = [
+          ['CRM 信息', `${row.crmName}（${row.crmId}）· ${row.crmDept || '部门待补'}${row.crmEmail ? ' · ' + row.crmEmail : ''}`],
+          row.status === 'pending' ? ['未自动匹配原因', row.failReason || 'CRM 人员尚未与系统账号对应'] : ['对应方式', `${(mappingModeLabels[row.mode] || mappingModeLabels.none)[0]}${row.matchedAt ? ' · ' + row.matchedAt : ''}`],
+          row.status === 'pending' && candidate ? ['推荐账号与依据', `${candidate.name}（${candidate.id}）· ${basis || '姓名一致'}`] : null,
+          ['影响范围', row.status === 'pending'
+            ? `补建 1 条商机级确权、1 个空间关系；该 CRM 人员另有 ${Number(row.customerCount || 0)} 个客户 · ${Number(row.opportunityCount || 0)} 个商机`
+            : `名下 ${Number(row.customerCount || 0)} 个客户 · ${Number(row.opportunityCount || 0)} 个商机；更换对应只影响下一次同步的补建目标`],
+          ['处理口径', '对应关系只决定确权补建到哪个账号，不改变 CRM 事实']
+        ].filter(Boolean).map(([term, value]) => `<dt>${e(term)}</dt><dd>${e(value)}</dd>`).join('');
+
+        const detail = `<tr class="fp-map-detail" data-crm-map-detail-row="${e(row.crmId)}" hidden><td colspan="5"><div class="fp-map-detail-box"><dl class="fp-kv">${detailRows}</dl><div class="fp-map-actions">${row.status === 'pending' ? linkAction('查看影响', 'crm-impact', row.pendingId || '') : linkAction('查看影响', 'crm-map-impact', row.crmId)}</div></div></td></tr>`;
+
+        const current = `<tr data-crm-mapping-row data-crm-id="${e(row.crmId)}" data-status="${e(row.status)}"><td><strong>${e(row.crmName)}</strong><small>${e(row.crmId)} · ${e(row.crmDept || '部门待补')}</small></td><td>${accountCell}</td><td>${contextCell}</td><td>${statusCell}</td><td><div class="fp-map-actions">${actions}</div></td></tr>`;
+        const ownerText = owner ? `${owner.name} ${owner.id}` : '';
+        const contextText = pendingContext.customer ? `${pendingContext.customer} ${pendingContext.customerId} ${pendingContext.opportunity} ${pendingContext.opportunityId}` : '';
+        const haystack = `${row.crmName} ${row.crmId} ${row.crmDept || ''} ${row.crmEmail || ''} ${ownerText} ${contextText}`.toLocaleLowerCase('zh-CN');
+        return {
+          html: current + detail,
+          rank: row.status === 'pending' ? 0 : 1,
+          index,
+          keywordOk: !keyword || haystack.includes(keyword),
+          statusOk: !statusFilter || (statusFilter === 'matched' ? row.status === 'matched' : row.status === 'pending')
+        };
+      });
+      // 待对应行排在前面：运营进来先看到要处理的行，已对应行作为底账跟在其后。
+      const body = seed.filter(item => item.keywordOk && item.statusOk).sort((a, b) => a.rank - b.rank || a.index - b.index).map(item => item.html);
+      return { all, matched, pendingCount, autoCount, manualCount, statusFilter, body };
+    }
+
+    /**
+     * 对应关系面板：待对应人员分面的主体，同步概览不再重复这一块。
+     * @param {object} extra 待对应分面的补充口径：待对应条数与「人员无法对应」的兜底说明。
+     */
+    function renderMappingPanel(state, query = {}, extra = {}) {
+      const crm = state.crm || {};
+      const { all, matched, pendingCount, autoCount, manualCount, statusFilter, body } = buildMappingRows(state, query);
+      const countBadge = extra.pendingCount === undefined
+        ? (pendingCount ? F.badge('待对应 ' + pendingCount, 'amber') : '')
+        : F.badge(`${extra.pendingCount ? '待对应 ' : '已全部对应 '}${extra.pendingCount} 条`, extra.pendingCount ? 'amber' : 'green');
+      const hintText = extra.hint || '对应关系只决定确权补建到哪个账号，不改变 CRM 事实。';
+      const onlyPending = statusFilter === 'pending';
+      return `<section class="fp-panel" data-crm-mappings>
+        <header class="fp-panel-head"><div><h2>CRM 人员与系统账号</h2><p class="fp-hint">${hintText}</p></div><div class="fp-actions">${F.badge('已对应 ' + matched, 'green')}${countBadge}${F.button(onlyPending ? '显示全部' : '只看待对应', 'crm-map-only-pending')}${F.button('导出对应关系', 'crm-map-export')}</div></header>
+        <div class="fp-pad fp-stack">
+          <div class="fp-map-summary" data-crm-map-summary>
+            <div><strong>${all.length}</strong><span>CRM 人员</span></div>
+            <div><strong>${matched}</strong><span>已对应</span></div>
+            <div><strong>${pendingCount}</strong><span>待对应</span></div>
+            <div><strong>${autoCount} / ${manualCount}</strong><span>自动 / 人工</span></div>
+            <div><strong>${e(crm.lastSyncAt || '—')}</strong><span>最近同步</span></div>
+          </div>
+          ${pendingCount ? `<div class="fp-callout fp-callout--warn" data-crm-map-hint><strong>${pendingCount} 位 CRM 人员未对应系统账号：</strong>对应完成前不建立个人确权，也不影响同客户其他已对应销售；可采用推荐账号，或手动指定启用中的销售账号。</div>` : ''}
+          ${F.searchbar('搜索 CRM 姓名、系统账号或涉及客户', F.field('对应状态', 'mapStatus', statusFilter, 'select', [['', '全部状态'], ['pending', '待对应'], ['matched', '已对应']]))}
+          <div data-crm-mapping-results>${F.table(['CRM 人员', '系统账号 / 对应结果', '涉及客户 · 商机', '状态', '操作'], body, { caption: 'CRM 人员与系统账号对应关系', emptyMessage: '没有符合条件的人员，请调整搜索或筛选条件。', countLabel: '条人员对应', totalCount: all.length, compact: true, tableClass: 'fp-map-table', wrapClass: 'fp-map-table-wrap' })}</div>
+        </div>
+      </section>`;
+    }
+
+    /** 同步概览只回答「本轮同步结果是什么」；人员对应与配置映射整体挂在待对应人员分面。 */
     function renderCrmOverview(state) {
       const crm = state.crm;
-      const mappings = [
-        ['CRM-U-201', '付赞', 'U-1004', '已对应'], ['CRM-U-202', '张云飞', 'U-1005', '已对应'],
-        ...crm.pendingMappings.filter(item => item.status === 'pending').map(item => [item.crmId, item.crmName, '', '待对应'])
-      ];
-      const mappingRows = mappings.map(([crmId, crmName, ownerId, status]) => `<tr><td><strong>${e(crmName)}</strong><small>${e(crmId)}</small></td><td>${e(ownerId ? F.name(ownerId) : '未对应')}</td><td>${F.badge(status, status === '已对应' ? 'green' : 'amber')}</td><td>${status === '待对应' ? F.button('设置对应', 'mapping', crm.pendingMappings.find(item => item.crmId === crmId)?.id || 'MAP-203') : '—'}</td></tr>`);
       const changes = crm.changes || [];
       const changeRows = changes.map(item => `<tr data-crm-row data-status="${e(item.status || 'applied')}" data-crm-change="${e(item.change)}"><td><strong>${e(item.customer)}</strong><small>${e(item.opportunityId || '')} · ${e(item.opportunity || '')}</small></td><td>${e(item.sales ? F.name(item.sales) : '待对应')}</td><td>${F.badge(changeLabels[item.change] || item.change, changeTones[item.change] || 'neutral')}</td><td>${e(item.occurredAt || '')}</td><td>${F.badge(crmStatusLabel(item.status), item.status === 'applied' ? 'green' : 'amber')}</td></tr>`);
       return `<div class="fp-stack" data-crm-result>
-        <div class="fp-title"><div><h2>CRM 归属同步</h2><p>CRM 是归属事实唯一来源；本地只展示同步、确权和异常结果。</p></div><div class="fp-actions">${F.role === 'ADM' ? F.button('立即对齐', 'crm-sync', '', true) : ''}${F.button('查看本轮批次', 'crm-batch')}${F.button('归属历史', 'crm-history')}${F.button('存量切换', 'crm-cutover')}</div></div>
-        <div class="fp-callout"><strong>同步策略：</strong>每 5 分钟读取客户、商机、人员关系和客户池；人员不可对应、未分配商机和单条失败分别处理，不提供本地认领或归属申请。<span class="fp-sub">事实版本 ${e(crm.factsVersion || '待生成')} · ${e(crm.lastResult || '')}</span></div>
         ${crmMetrics(crm)}
-        <section class="fp-panel"><header class="fp-panel-head"><h3>CRM 人员与系统账号</h3><span class="u-t3">映射只影响确权补建，不改变 CRM 事实</span></header>${F.table(['CRM 姓名', '系统账号', '对应状态', '操作'], mappingRows, { caption: 'CRM 人员与系统账号对应关系', emptyMessage: '当前没有待展示的 CRM 人员对应关系。', countLabel: '条人员对应', compact: true })}</section>
-        <section class="fp-panel"><header class="fp-panel-head"><h3>本轮同步结果</h3><div class="fp-actions">${F.button('待对应 ' + (crm.pending || 0), 'crm-pending')}${F.button('未分配 ' + (crm.unassigned || 0), 'crm-unassigned')}${F.button('异常 ' + (crm.failed || 0), 'crm-errors')}</div></header>${F.table(['客户 / 商机', '销售', '变化', '发生时间', '处理状态'], changeRows, { caption: 'CRM 归属同步与确权结果', emptyMessage: '当前批次没有归属变化。', countLabel: '条确权变化', compact: true })}</section>
+        <section class="fp-panel" data-crm-round><header class="fp-panel-head"><h3>本轮同步结果</h3></header>${F.table(['客户 / 商机', '销售', '变化', '发生时间', '处理状态'], changeRows, { caption: 'CRM 归属同步与确权结果', emptyMessage: '当前批次没有归属变化。', countLabel: '条确权变化', compact: true })}</section>
       </div>`;
     }
 
-    function renderPending(state) {
-      const rows = state.crm.pendingMappings.filter(item => item.status === 'pending').map(item => `<tr data-crm-row data-id="${e(item.id)}" data-status="pending"><td><strong>${e(item.crmName)}</strong><small>${e(item.crmId)}</small></td><td>${e(item.customer)}<small>${e(item.customerId)}</small></td><td>${e(item.opportunity)}<small>${e(item.opportunityId)}</small></td><td>${e(item.discoveredAt)}</td><td>${F.badge('待对应', 'amber')}</td><td>${F.button('设置对应', 'crm-map', item.id)}${F.button('查看影响', 'crm-impact', item.id)}</td></tr>`);
-      return `<section data-crm-pending-list class="fp-panel"><header class="fp-panel-head"><div><h2>待对应人员</h2><p class="fp-hint">人员无法对应时不建立个人确权；完成对应后自动补建确权并复用原空间。</p></div><span data-crm-pending-count>${state.crm.pending || 0} 条</span></header>${F.table(['CRM 人员', '涉及客户', '涉及商机', '首次发现', '当前状态', '操作'], rows, { caption: 'CRM 待对应人员清单', emptyMessage: '没有待对应人员。', countLabel: '条待对应事项', compact: true })}</section>`;
+    /**
+     * 待对应人员分面：人员对应与配置映射的唯一处理入口。
+     * 看到＝对应总览与全量对应关系；get 到＝未对应原因、推荐账号、涉及客户/商机；
+     * 操作＝采用推荐、设置/更换对应、查看影响。
+     */
+    function renderPending(state, query = {}) {
+      const { pendingCount } = buildMappingRows(state, query);
+      // 未对应影响已在面板内的高亮提示里完整说明，表头只保留这句口径，避免同一段话出现两遍。
+      const hint = pendingCount
+        ? '对应关系只决定确权补建到哪个账号，不改变 CRM 事实。'
+        : '当前所有 CRM 人员都已对应系统账号；对应关系只决定确权补建到哪个账号，不改变 CRM 事实。';
+      const body = renderMappingPanel(state, query, { pendingCount, hint });
+      return `<div class="fp-stack" data-crm-pending-list><span class="fp-sr-only" data-crm-pending-count>${pendingCount} 条待对应</span>${body}</div>`;
     }
 
     function renderUnassigned(state) {
@@ -68,22 +273,13 @@
       return `<section class="fp-panel"><header class="fp-panel-head"><div><h2>对齐异常</h2><p class="fp-hint">单条失败不会阻塞整批；下一轮会自动重试，修复结果保留在审计记录中。</p></div><span>${state.crm.failed || 0} 条待处理</span></header>${F.table(['客户 / 商机', 'CRM 人员', '失败环节', '失败原因', '发生时间', '状态', '操作'], rows, { caption: 'CRM 归属对齐异常清单', emptyMessage: '本轮没有待处理异常。', countLabel: '条异常', compact: true })}</section>`;
     }
 
-    function renderCutover(state) {
-      const migration = state.migration || {};
-      const phase = migration.phase || '待执行';
-      const stateText = migration.status === 'open' ? '新模型已开放消费' : migration.status === 'blocked' ? '暂停开放：存在范围差异' : migration.status === 'validated' ? '回归校验通过，可开放新模型' : phase;
-      const checks = migration.checks?.length ? migration.checks : [{ sales: '付赞', before: 6, after: 6, diff: '待校验', status: 'pending' }, { sales: '张云飞', before: 3, after: 2, diff: '少 1 个（演示阻断）', status: 'failed' }];
-      const action = migration.status === 'blocked' ? F.button('修复演示差异', 'cutover-fix') : migration.status === 'validated' ? F.button('开放新模型', 'cutover-open', '', true) : F.button('执行切换校验', 'cutover-start', '', true);
-      return `<section class="fp-panel" data-cutover-state><header class="fp-panel-head"><div><h2>存量切换</h2><p class="fp-hint">全量刷新 → 范围快照 → 新确权模型 → 回归校验 → 开放消费</p></div><div class="fp-actions">${F.badge(stateText, migration.status === 'blocked' ? 'amber' : migration.status === 'open' ? 'green' : 'brand')}${F.role === 'ADM' ? action : ''}</div></header><div class="fp-pad fp-stack"><div class="fp-steps">${['CRM 全量刷新', '切换前快照', '建立新模型', '范围回归校验', '开放消费'].map((label, index) => `<span class="${index < (migration.status === 'open' ? 5 : migration.status === 'validated' ? 4 : migration.status === 'blocked' ? 4 : 0) ? 'is-active' : ''}">${index + 1}. ${label}</span>`).join('')}</div>${migration.status === 'blocked' ? '<div class="fp-callout fp-callout--warn">发现既有销售可见范围缩小，已阻止开放。先修复差异，再重新执行校验。</div>' : migration.status === 'open' ? '<div class="fp-callout">范围回归完成，当前已开放新确权模型消费。</div>' : '<div class="fp-callout">切换操作会保留切换前范围快照；校验未通过前不会向下游开放。</div>'}${F.table(['销售', '切换前空间', '切换后空间', '差异', '校验结果'], checks.map(item => `<tr data-cutover-row><td>${e(item.sales)}</td><td>${e(item.before)}</td><td>${e(item.after)}</td><td>${e(item.diff)}</td><td>${F.badge(item.status === 'passed' ? '通过' : item.status === 'failed' ? '阻止开放' : '待校验', item.status === 'passed' ? 'green' : item.status === 'failed' ? 'amber' : 'neutral')}</td></tr>`), { caption: 'CRM 存量切换范围回归校验', emptyMessage: '尚未生成范围校验结果。', countLabel: '条销售范围', compact: true })}<dl class="fp-kv"><dt>切换批次</dt><dd>${e(migration.startedAt || '待开始')}</dd><dt>快照时间</dt><dd>${e(migration.snapshotAt || '待生成')}</dd><dt>当前阶段</dt><dd>${e(phase)}</dd><dt>范围差异</dt><dd>${e(migration.diffCount || 0)} 条</dd></dl></div></section>`;
-    }
-
     function renderCrmHistory(state) {
       const rows = (state.crm.changes || []).map(item => `<tr data-crm-row data-crm-change="${e(item.change)}"><td><strong>${e(item.customer)}</strong><small>${e(item.opportunityId || '')}</small></td><td>${e(item.sales ? F.name(item.sales) : '待对应')}</td><td>${F.badge(changeLabels[item.change] || item.change, changeTones[item.change] || 'neutral')}</td><td>${e(item.batchId || '')}</td><td>${e(item.occurredAt || '')}</td><td>${F.button('查看链路', 'crm-history-detail', item.id)}</td></tr>`);
       return `<section class="fp-panel"><header class="fp-panel-head"><div><h2>归属变化历史</h2><p class="fp-hint">保留 CRM 原始事实、确权结果和空间分发结果，当前名单与历史过程分开查看。</p></div></header>${F.table(['客户 / 商机', '销售', '变化', '批次', '发生时间', '操作'], rows, { caption: 'CRM 归属变化历史记录', emptyMessage: '当前没有归属变化记录。', countLabel: '条历史记录', compact: true })}</section>`;
     }
 
     function renderCrm(state) {
-      const body = crmView === 'pending' ? renderPending(state) : crmView === 'unassigned' ? renderUnassigned(state) : crmView === 'errors' ? renderErrors(state) : crmView === 'cutover' ? renderCutover(state) : crmView === 'history' ? renderCrmHistory(state) : renderCrmOverview(state);
+      const body = crmView === 'pending' ? renderPending(state, mapQuery) : crmView === 'unassigned' ? renderUnassigned(state) : crmView === 'errors' ? renderErrors(state) : crmView === 'history' ? renderCrmHistory(state) : renderCrmOverview(state);
       return `<div class="fp-stack">${crmSubnav()}${body}</div>`;
     }
 
@@ -224,17 +420,71 @@
       });
     }
 
-    function openMappingForm(id) {
-      const state = F.load(), mapping = state.crm.pendingMappings.find(item => item.id === id) || state.crm.pendingMappings.find(item => item.status === 'pending');
-      if (!mapping) { SC.toast('当前没有待对应人员。', 'ok'); return; }
+    /**
+     * 人员对应表单：同时服务待对应人员的首次对应和已对应人员的更换。
+     * 表单先给影响预览（推荐依据、将补建的确权与空间），再给账号选择，避免只看账号不看后果。
+     */
+    function openMappingForm(id, crmId = '') {
+      const state = F.load();
+      const crm = state.crm || {};
+      const row = crmId ? (crm.mappings || []).find(item => item.crmId === crmId) : null;
+      const mapping = crmId ? null : (crm.pendingMappings || []).find(item => item.id === id) || (crm.pendingMappings || []).find(item => item.status === 'pending');
+      if (!row && !mapping) { SC.toast('当前没有待对应人员。', 'ok'); return; }
+      const source = row || mapping;
       const people = state.people.filter(person => person.role === 'SLS' && person.status === 'on');
-      F.form('设置 CRM 人员对应 · ' + mapping.crmName, `<div class="fp-callout">${e(mapping.crmName)}（${e(mapping.crmId)}）涉及 ${e(mapping.customer)} / ${e(mapping.opportunity)}。确认后将补建商机确权，并复用同一销售、客户、客户池的原空间。</div>${F.field('系统销售账号 *', 'mappedOwner', people[0]?.id || '', 'select', people.map(person => [person.id, `${person.name} · ${person.id}`]))}<dl class="fp-kv"><dt>将补建</dt><dd>1 条商机级确权 · 1 个空间关系</dd><dt>归属来源</dt><dd>CRM 人员对应修复</dd></dl>`, values => F.resolveCrmMapping(mapping.id, values.mappedOwner), () => draw(), '确认对应');
+      const currentOwner = row?.ownerId || '';
+      const defaultOwner = currentOwner || row?.suggestOwnerId || people[0]?.id || '';
+      const context = row
+        ? `<div class="fp-callout">${e(row.crmName)}（${e(row.crmId)}）当前对应 ${e(currentOwner ? F.name(currentOwner) : '未对应')}。更换后只影响下一次同步的确权补建，已生成的确权与空间不回溯变更。</div>`
+        : `<div class="fp-callout">${e(mapping.crmName)}（${e(mapping.crmId)}）涉及 ${e(mapping.customer)} / ${e(mapping.opportunity)}。确认后将补建商机确权，并复用同一销售、客户、客户池的原空间。</div>`;
+      const suggestion = row?.suggestOwnerId
+        ? `<dt>推荐账号</dt><dd>${e(F.name(row.suggestOwnerId))}（${e(row.suggestOwnerId)}）· ${e(row.suggestBasis || '姓名一致')}</dd>`
+        : '';
+      F.form((row ? '更换 CRM 人员对应 · ' : '设置 CRM 人员对应 · ') + source.crmName,
+        `${context}${F.field('系统销售账号 *', 'mappedOwner', defaultOwner, 'select', people.map(person => [person.id, `${person.name} · ${person.id}`]))}<dl class="fp-kv">${suggestion}<dt>将补建</dt><dd>1 条商机级确权 · 1 个空间关系</dd><dt>归属来源</dt><dd>CRM 人员对应修复</dd></dl>`,
+        values => (row ? F.changeCrmMapping(row.crmId, values.mappedOwner) : F.resolveCrmMapping(mapping.id, values.mappedOwner)),
+        () => draw(), row ? '确认更换' : '确认对应');
+    }
+
+    /** 采用推荐账号前先给影响预览：推荐依据、涉及客户与商机、补建结果，确认后才写入。 */
+    function openSuggestionConfirm(pendingId) {
+      const state = F.load();
+      const row = (state.crm?.mappings || []).find(item => item.pendingId === pendingId);
+      if (!row || !row.suggestOwnerId) { SC.toast('该条没有可采用的推荐账号，请手动设置对应。', 'bad'); return; }
+      const person = F.person(row.suggestOwnerId);
+      const mapping = (state.crm.pendingMappings || []).find(item => item.id === pendingId);
+      F.drawer('采用推荐账号 · ' + row.crmName, `<div class="fp-stack" data-crm-suggestion>
+        <div class="fp-callout">推荐 ${e(person?.name || row.suggestOwnerId)}（${e(row.suggestOwnerId)}）：${e(row.suggestBasis || '姓名一致')}。采用后与手动设置对应走同一条补建链路。</div>
+        <dl class="fp-kv"><dt>CRM 人员</dt><dd>${e(row.crmName)}（${e(row.crmId)}）</dd><dt>涉及客户</dt><dd>${e(mapping?.customer || '—')}</dd><dt>涉及商机</dt><dd>${e(mapping?.opportunity || '—')}</dd><dt>将补建</dt><dd>1 条商机级确权 · 1 个空间关系</dd><dt>不影响</dt><dd>同客户其他已对应销售的权限不变</dd></dl>
+        <div class="fp-actions">${F.button('确认采用', 'crm-map-accept-confirm', pendingId, true)}</div>
+      </div>`, (mask, close) => {
+        mask.querySelector('[data-action="crm-map-accept-confirm"]').onclick = () => {
+          try {
+            const name = F.acceptCrmSuggestion(pendingId);
+            close(); draw();
+            SC.toast(`已对应到 ${name}，确权将在下一次同步补建。`, 'ok');
+          } catch (error) { SC.toast(error.message, 'bad'); }
+        };
+      });
+    }
+
+    /** 已对应人员的影响范围：只读展示该对应关系当前支撑的客户空间，便于判断能否更换。 */
+    function openMappingImpact(crmId) {
+      const state = F.load();
+      const row = (state.crm?.mappings || []).find(item => item.crmId === crmId);
+      if (!row) { SC.toast('对应记录不存在，请刷新后重试。', 'bad'); return; }
+      const spaces = state.spaces.filter(space => space.sales === row.ownerId);
+      const rows = spaces.map(space => `<tr><td><strong>${e(space.customer)}</strong><small>${e(space.id)}</small></td><td>${e(space.pool || '待补客户池')}</td><td>${F.badge(space.state === 'frozen' ? '已冻结' : '进行中', space.state === 'frozen' ? 'neutral' : 'green')}</td><td>${(space.opps || []).length}</td></tr>`);
+      F.drawer('对应影响 · ' + row.crmName, `<div class="fp-stack">
+        <div class="fp-callout">${e(row.crmName)} 对应 ${e(row.ownerId ? F.name(row.ownerId) : '未对应')}；该账号按此对应关系接收 CRM 确权，本地不改变 CRM 事实。</div>
+        ${F.table(['客户空间', '客户池', '生命周期', '已确权商机'], rows, { caption: 'CRM 人员对应影响的客户空间', emptyMessage: '该账号当前没有已建立的空间。', countLabel: '个空间', compact: true })}
+      </div>`);
     }
 
     function openCrmBatch() {
       const state = F.load(), crm = state.crm, batch = crm.batches.find(item => item.id === crm.currentBatchId) || crm.batches[0];
       if (!batch) return;
-      F.drawer('CRM 同步批次 · ' + batch.id, `<div class="fp-stack"><div class="fp-callout">${e(batch.trigger || '定时')}同步于 ${e(batch.at)} 完成，事实版本 ${e(batch.factsVersion)}。</div>${F.metrics([['处理对象', batch.processed, '条 CRM 事实'], ['新增', batch.added, '确权'], ['移除', batch.removed, '确权'], ['恢复', batch.restored, '确权']])}${F.table(['处理项', '数量', '说明'], [['无变化', batch.unchanged, '事实未变化'], ['待对应', batch.pending, '人员映射待处理'], ['未分配', batch.unassigned, '需回 CRM 补分配'], ['异常', batch.failed, '下一轮自动重试']].map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`), { caption: 'CRM 同步批次摘要', emptyMessage: '暂无批次明细。', countLabel: '项结果', compact: true })}</div>`);
+      F.drawer('CRM 同步批次 · ' + batch.id, `<div class="fp-stack"><div class="fp-callout">${e(batch.trigger || '定时')}同步于 ${e(batch.at)} 完成，事实版本 ${e(batch.factsVersion)}。${crm.lastResult ? `<br>本轮结论：${e(crm.lastResult)}` : ''}</div>${F.metrics([['处理对象', batch.processed, '条 CRM 事实'], ['新增', batch.added, '确权'], ['移除', batch.removed, '确权'], ['恢复', batch.restored, '确权']])}${F.table(['处理项', '数量', '说明'], [['无变化', batch.unchanged, '事实未变化'], ['待对应', batch.pending, '人员映射待处理'], ['未分配', batch.unassigned, '需回 CRM 补分配'], ['异常', batch.failed, '下一轮自动重试']].map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`), { caption: 'CRM 同步批次摘要', emptyMessage: '暂无批次明细。', countLabel: '项结果', compact: true })}<p class="fp-hint">同步策略：每 5 分钟读取客户、商机、人员关系和客户池；人员不可对应、未分配商机和单条失败分别处理，不提供本地认领或归属申请。</p></div>`);
     }
 
     function openHistoryDetail(id) {
@@ -472,7 +722,12 @@
       root.innerHTML = `<section class="fp-panel">${F.tabs(options, tab)}<div class="fp-pad" data-settings></div></section>`;
       const target = root.querySelector('[data-settings]');
       if (tab === 'model') target.innerHTML = `<form class="fp-form"><div class="fp-title"><div><h2>业务模型</h2><p>模型名称、服务地址与生成参数。</p></div>${F.badge('演示配置', 'brand')}</div><div class="fp-config-grid">${F.field('配置名称 *', 'model', c.model)}${F.field('服务提供方', 'provider', c.provider, 'select', ['OpenAI compatible', 'Azure OpenAI', '本地推理服务'])}${F.field('API Base URL *', 'endpoint', c.endpoint, 'url')}${F.field('Temperature（0～2）', 'temperature', c.temperature, 'number')}</div><div class="fp-readonly">凭据由服务端管理。当前页面不包含真实 API Key。</div><p class="fp-error" role="alert"></p><div class="fp-actions"><button type="submit" class="btn btn--primary">保存配置</button>${F.button('检查配置格式', 'check-model')}</div></form>`;
-      if (tab === 'crm') target.innerHTML = renderCrm(s);
+      if (tab === 'crm') {
+        target.innerHTML = renderCrm(s);
+        // 对应关系表的搜索与筛选状态保存在页面闭包内，切换分面后回来仍保持。
+        F.restoreSearch(target, mapQuery);
+        F.handleSearch(target, values => { mapQuery = values; draw(); });
+      }
       if (tab === 'notify') {
         target.innerHTML = `<div class="fp-stack">${notifySubnav()}${notifyView === 'delivery' ? renderNotifyDelivery(s) : renderNotifyEvents(s)}</div>`;
         F.restoreSearch(target, notifyQuery);
@@ -488,7 +743,6 @@
         });
       }
       if (tab === 'openclaw') target.innerHTML = renderOpenclaw(s);
-      if (tab === 'levels') target.innerHTML = `<div class="fp-stack"><h2>客户等级规则</h2><p class="fp-hint">按客户价值与经营优先级整理等级描述，供筛选和洞察展示使用。</p>${F.table(['等级', '等级说明', '操作'], ['S', 'A', 'B', 'C'].map((grade, i) => `<tr><td>${F.badge(grade, 'brand')}</td><td>${e(c['grade' + grade] || ['战略客户，优先投入', '高潜客户，重点跟进', '持续培育，定期触达', '低频维护，观察变化'][i])}</td><td>${F.button('编辑说明', 'grade', grade)}</td></tr>`), { caption: '客户等级及经营优先级规则', emptyMessage: '当前没有客户等级规则。', countLabel: '个等级', compact: true })}</div>`;
       if (tab === 'pools') {
         const meta = s.assignmentMeta || {};
         const poolRows = s.people.filter(p => p.role === 'SOL').map(p => {
@@ -555,13 +809,31 @@
         F.download('人员与账号.csv', F.csv([['人员 ID', '姓名', '邮箱', '手机号', '角色', '账号状态', '创建时间', '最近登录'], ...state.people.map(person => [person.id, person.name, person.email, person.mobile || '', roleLabel(person.role), statusLabel(person.status), person.createdAt, person.lastLoginAt])]));
         SC.toast('已导出当前人员列表。', 'ok');
       },
-      'crm-view': view => { crmView = view; const url = new URL(location.href); url.searchParams.set('crmView', view); history.replaceState({}, '', url.href); draw(); },
-      'crm-pending': () => { crmView = 'pending'; draw(); },
-      'crm-unassigned': () => { crmView = 'unassigned'; draw(); },
-      'crm-errors': () => { crmView = 'errors'; draw(); },
-      'crm-cutover': () => { crmView = 'cutover'; draw(); },
+      'crm-view': view => { crmView = crmViews.some(([key]) => key === view) ? view : 'overview'; const url = new URL(location.href); url.searchParams.set('crmView', crmView); history.replaceState({}, '', url.href); draw(); },
       'crm-history': () => { crmView = 'history'; draw(); },
       'crm-sync': () => { F.startCrmSync(); draw(); SC.toast('CRM 即时对齐已完成，本轮未重复生成变化。', 'ok'); },
+      'xbb-open': () => openXbbDrawer(),
+      'crm-map-accept': id => openSuggestionConfirm(id),
+      'crm-map-change': crmId => openMappingForm('', crmId),
+      'crm-map-impact': crmId => openMappingImpact(crmId),
+      'crm-map-only-pending': () => { mapQuery = { ...mapQuery, mapStatus: mapQuery.mapStatus === 'pending' ? '' : 'pending' }; draw(); },
+      // 详情在行内第二层展开：默认行只放决策必需信息，依据 / 部门 / 影响拆解按下再展开。
+      'crm-map-detail': crmId => {
+        const row = document.querySelector(`[data-crm-map-detail-row="${crmId}"]`);
+        const trigger = document.querySelector(`[data-action="crm-map-detail"][data-value="${crmId}"]`);
+        if (!row) return;
+        const open = row.hasAttribute('hidden');
+        if (open) row.removeAttribute('hidden'); else row.setAttribute('hidden', '');
+        trigger?.setAttribute('aria-expanded', String(open));
+        // 行上下文取自控件自身：CRM 人员 ID 属外部事实，不能用本地人员字典反查。
+        trigger?.setAttribute('aria-label', (open ? '收起详情：' : '详情：') + (trigger.dataset.crmName || crmId));
+        (trigger?.closest('tr') || trigger)?.classList.toggle('is-expanded', open);
+      },
+      'crm-map-export': () => {
+        const rows = (F.load().crm?.mappings || []).map(row => [row.crmId, row.crmName, row.crmDept || '', row.ownerId ? `${F.name(row.ownerId)}（${row.ownerId}）` : '未对应', (mappingModeLabels[row.mode] || mappingModeLabels.none)[0], row.matchedAt || '', row.customerCount || 0, row.opportunityCount || 0]);
+        F.download('CRM人员与系统账号对应关系.csv', F.csv([['CRM ID', 'CRM 姓名', 'CRM 部门', '系统账号', '对应方式', '对应时间', '涉及客户', '涉及商机'], ...rows]));
+        SC.toast('已导出当前对应关系。', 'ok');
+      },
       'crm-batch': () => openCrmBatch(),
       'crm-map': id => openMappingForm(id),
       mapping: id => openMappingForm(id || 'MAP-203'),
@@ -575,9 +847,6 @@
         if (item) F.drawer('对齐异常 · ' + item.id, `<div class="fp-stack"><div class="fp-callout fp-callout--warn">${e(item.reason)}</div><dl class="fp-kv"><dt>客户 / 商机</dt><dd>${e(item.customer)} / ${e(item.opportunity)}</dd><dt>CRM 人员</dt><dd>${e(item.crmName)}</dd><dt>失败环节</dt><dd>${e(item.stage)}</dd><dt>发生时间</dt><dd>${e(item.occurredAt)}</dd><dt>重试次数</dt><dd>${e(item.retryCount || 0)} 次</dd><dt>当前状态</dt><dd>${F.badge(crmStatusLabel(item.status), item.status === 'resolved' ? 'green' : 'amber')}</dd></dl></div>`);
       },
       'crm-history-detail': id => openHistoryDetail(id),
-      'cutover-start': () => { F.runMigrationCheck(); draw(); SC.toast('切换校验已完成，请先处理范围差异。', 'ok'); },
-      'cutover-fix': () => { F.fixMigrationDiff(); draw(); SC.toast('演示差异已修复，请重新执行回归校验。', 'ok'); },
-      'cutover-open': () => { F.openMigration(); draw(); SC.toast('新确权模型已开放消费。', 'ok'); },
       'notify-view': view => { notifyView = view; const url = new URL(location.href); url.searchParams.set('notifyView', view); history.replaceState({}, '', url.href); draw(); },
       'daily-view': view => { dailyView = view; const url = new URL(location.href); url.searchParams.set('dailyView', view); history.replaceState({}, '', url.href); draw(); },
       'daily-run': () => { const report = F.runDailyReport(); draw(); SC.toast(report?.status === 'empty' ? '当日无有效变化，仅保留运行记录。' : report?.status === 'failed' ? '当日日报全部客户生成失败，已发送一次失败提醒。' : '当日日报已生成并送达接收人。', 'ok'); },
@@ -596,7 +865,6 @@
       'daily-publish': () => { F.publishDailyPrompts(); draw(); SC.toast('已发布完整版本，下一自然日起生效；当天已生成日报不变。', 'ok'); },
       'daily-rollback': () => { F.rollbackDailyPrompts(); draw(); SC.toast('已回退到上一完整生效版，下一自然日起生效。', 'ok'); },
       health: () => F.drawer('运行健康状态', F.table(['检查项', '演示结果'], ['Gateway', 'MCP 服务', '空间权限读取', '文档加载'].map(x => `<tr><td>${x}</td><td>${F.badge('正常', 'green')}</td></tr>`), { caption: 'OpenClaw 运行健康检查结果', emptyMessage: '当前没有可用的健康检查结果。', countLabel: '项检查', compact: true }) + '<p class="fp-hint u-mt3">以上为本地演示快照，不代表实时服务状态。</p>'),
-      grade: grade => F.form('编辑 ' + grade + ' 级说明', F.field('等级说明 *', 'description', F.load().config['grade' + grade] || '', 'textarea'), v => { if (!v.description.trim()) throw Error('请填写等级说明。'); F.mutate('修改等级说明', s => { s.config['grade' + grade] = v.description.trim(); }); }, draw),
       pools: id => {
         const s = F.load();
         const before = s.assignments[id] || [];

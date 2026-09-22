@@ -1,4 +1,10 @@
-/* Web 端右下角助手入口；移动端平台样式里会隐藏。 */
-.fab { position: fixed; right: 30px; bottom: 30px; width: 54px; height: 54px; display: grid; place-items: center; z-index: 20; border: 0; border-radius: 18px; color: var(--accent-on); background: var(--accent); box-shadow: 0 8px 24px color-mix(in oklab, var(--accent), transparent 72%); transition: transform var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard); }
-.fab:hover { transform: translateY(-2px); background: var(--accent-hover); }
-.fab svg { width: 22px; height: 22px; }
+/* 本人助手悬浮入口：客户 / 相关 / 我的常驻；「今日」由欢迎区承接、空间详情由空间助手承接，因此隐藏。 */
+.mobile-fab { position: fixed; right: var(--gutter); bottom: calc(var(--bottom-nav-h) + var(--space-5)); z-index: 18; display: grid; place-items: center; width: var(--space-12); height: var(--space-12); border: 0; border-radius: 50%; color: var(--accent-on); background: var(--accent); box-shadow: var(--elev-accent); transition: transform var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard); }
+.mobile-fab:active { transform: scale(.94); background: var(--accent-active); }
+.mobile-fab .ic { width: var(--icon-lg); height: var(--icon-lg); }
+.mobile-fab[hidden] { display: none; }
+
+/* 空间助手悬浮入口：只在空间详情内展示，可拖动换位（位置记本机）；与本人助手 FAB 同语言，surface 底加以区分（M05-3 §4.3） */
+.space-fab { position: fixed; right: var(--gutter); bottom: calc(var(--bottom-nav-h) + var(--space-5)); z-index: 18; display: grid; place-items: center; width: var(--space-12); height: var(--space-12); border: 1px solid var(--border); border-radius: 50%; color: var(--accent); background: var(--surface); box-shadow: var(--elev-raised); touch-action: none; transition: transform var(--motion-fast) var(--ease-standard); }
+.space-fab:active { transform: scale(.94); }
+.space-fab .ic { width: var(--icon-lg); height: var(--icon-lg); }

@@ -1,43 +1,42 @@
-/* 移动端公共骨架：顶栏、滚动内容、底栏。iOS / Android 会再覆盖尺寸。 */
-.mobile-frame { width: 100%; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
-.mobile-status { height: 30px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 20px 5px; color: var(--fg); background: var(--surface); font-family: var(--font-mono); font-size: 10px; }
-.mobile-status-icons { display: flex; align-items: center; gap: 5px; }
-.mobile-topbar { min-height: 66px; display: flex; align-items: center; justify-content: space-between; padding: 10px 18px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.mobile-greeting .eyebrow { margin-bottom: 2px; font-size: 10px; }
-.mobile-greeting h1 { font-size: 22px; }
-.mobile-top-actions { display: flex; align-items: center; gap: 3px; }
-.mobile-top-actions .icon-button { width: 38px; height: 38px; }
-.mobile-content { flex: 1; overflow: auto; padding: 18px 16px 94px; }
-.mobile-section { margin-bottom: 26px; }
-.mobile-section .section-head { margin-bottom: 10px; }
-.mobile-section .section-head h2 { font-size: 18px; }
-.mobile-section .section-note { font-size: 11px; }
-.mobile-follow-list { display: grid; gap: 9px; }
-.mobile-follow-list .follow-card { min-height: 114px; padding: 15px 42px 14px 15px; }
-.mobile-follow-list .card-person { margin-bottom: 8px; }
-.mobile-follow-list .person-avatar { width: 30px; height: 30px; font-size: 12px; }
-.mobile-follow-list .person-name { font-size: 14px; }
-.mobile-follow-list .reason { font-size: 12px; }
-.mobile-follow-list .next-step { margin-top: 7px; font-size: 11px; }
-.mobile-follow-list .expand-caret { top: 15px; right: 11px; }
-.mobile-follow-list .card-link { right: 12px; bottom: 13px; }
-.mobile-inbox { padding: 17px 14px 15px; }
-.mobile-inbox .inbox-header { display: block; padding-bottom: 13px; }
-.mobile-inbox .inbox-title { margin-bottom: 12px; }
-.mobile-inbox .segmented { width: 100%; }
-.mobile-inbox .segmented button { flex: 1; }
-.mobile-inbox .inbox-row { gap: 9px; min-height: 65px; padding: 11px 1px; }
-.mobile-inbox .inbox-type { width: 30px; height: 30px; border-radius: 8px; }
-.mobile-inbox .inbox-type svg { width: 15px; height: 15px; }
-.mobile-inbox .inbox-title-line strong { font-size: 12px; }
-.mobile-inbox .inbox-meta { font-size: 10px; }
-.mobile-inbox .inbox-time { font-size: 10px; }
-.mobile-inbox .space-link { padding-left: 2px; padding-right: 0; }
-.mobile-inbox .inbox-detail-content { margin-left: 0; padding: 13px; }
-.mobile-inbox .detail-copy { font-size: 12px; }
-/* 底栏贴屏幕底部，并给安全区留出内边距。 */
-.mobile-bottom-nav { position: fixed; inset: auto 0 0; height: 76px; display: grid; grid-template-columns: repeat(4, 1fr); z-index: 15; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: color-mix(in oklab, var(--surface), transparent 3%); }
-.bottom-nav-item { display: grid; place-items: center; align-content: center; gap: 3px; border: 0; border-radius: 10px; color: var(--muted); background: transparent; font-size: 10px; }
-.bottom-nav-item.is-active { color: var(--accent); font-weight: 650; }
-.bottom-nav-item svg { width: 19px; height: 19px; }
-.mobile-fab { right: 16px; bottom: 91px; width: 48px; height: 48px; border-radius: 16px; }
+/* 移动端公共骨架：手机框、顶栏、滚动内容区、四入口底栏、路由转场。平台层（ios-base / ios）再覆盖尺寸。 */
+/* 手机框兼作路由转场的定位容器：转场垫层与滑动内容都以它为界。 */
+.mobile-frame { position: relative; width: 100%; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.mobile-topbar { min-height: var(--topbar-h); display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--gutter) var(--space-25); background: var(--surface); }
+.mobile-topbar[hidden] { display: none; }
+.mobile-greeting { display: grid; gap: var(--space-05); }
+.mobile-content { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--space-05) var(--gutter) calc(var(--bottom-nav-h) + var(--space-4)); overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; }
+.mobile-content::-webkit-scrollbar { display: none; }
+
+/* ---------------- 路由转场：进入客户空间向前滑入，返回入口向后滑出 ---------------- */
+
+/*
+ * 转场由 .mobile-frame 上的 is-entering-* 与垫层上的 is-leaving-* 配对完成：
+ * 前进时新页从左压过来、旧页快照在下方左移让位；返回时旧页快照在上方右移退出、新页从左归位。
+ * 垫层是同尺寸的旧页快照，动画结束后由脚本整层移除，因此不参与布局与点击。
+ */
+.view-transition-layer { position: absolute; inset: 0; z-index: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); pointer-events: none; }
+/* 转场中的新页必须自带不透明底色：内容区本身透明，否则滑动时会透出下面的旧页 */
+.mobile-frame.is-entering-forward > .mobile-topbar,
+.mobile-frame.is-entering-forward > .mobile-content { position: relative; z-index: 2; background: var(--surface); animation: view-enter-forward var(--motion-slow) var(--ease-standard) both; }
+.mobile-frame.is-entering-back > .mobile-topbar,
+.mobile-frame.is-entering-back > .mobile-content { position: relative; z-index: 1; background: var(--surface); animation: view-enter-back var(--motion-slow) var(--ease-standard) both; }
+.view-transition-layer.is-leaving-forward { z-index: 1; animation: view-leave-forward var(--motion-slow) var(--ease-standard) both; }
+.view-transition-layer.is-leaving-back { z-index: 2; animation: view-leave-back var(--motion-slow) var(--ease-standard) both; }
+@keyframes view-enter-forward { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes view-enter-back { from { transform: translateX(calc(-1 * var(--motion-view-offset))); } to { transform: translateX(0); } }
+@keyframes view-leave-forward { from { transform: translateX(0); } to { transform: translateX(calc(-1 * var(--motion-view-offset))); } }
+@keyframes view-leave-back { from { transform: translateX(0); } to { transform: translateX(100%); } }
+.mobile-section { margin-bottom: var(--space-6); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); min-height: var(--space-8); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+.section-head-left { display: flex; align-items: baseline; gap: var(--space-25); min-width: 0; }
+.section-head + .list, .section-head + .notice, .section-head + .empty-state { margin-top: 0; }
+.section-head + .kv-list, .section-head + .switch-row, .section-head + .card { margin-top: var(--space-3); }
+.u-mt { margin-top: var(--space-6); }
+.mobile-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+/* 底栏贴屏幕底部，并给安全区留出内边距 */
+.mobile-bottom-nav { position: fixed; inset: auto 0 0; z-index: 15; height: var(--bottom-nav-h); display: grid; grid-template-columns: repeat(4, 1fr); padding: var(--space-1) var(--gutter) calc(var(--space-1) + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); }
+.bottom-nav-item { display: grid; place-items: center; align-content: center; gap: var(--space-05); min-height: var(--tap-min); border: 0; border-radius: 0; color: var(--muted); background: transparent; }
+.bottom-nav-item .ic { width: var(--icon-lg); height: var(--icon-lg); }
+.bottom-nav-item .t-eyebrow { color: inherit; letter-spacing: 0; }
+.bottom-nav-item.is-active { color: var(--accent); }
+.bottom-nav-item.is-active .t-eyebrow { font-weight: var(--weight-title); }

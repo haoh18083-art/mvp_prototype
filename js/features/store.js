@@ -24,6 +24,12 @@
       lastResult: '本轮对齐完成，1 条异常将在下一轮重试。',
       batches: [{ id: 'B-0915', at: '2026-09-15 10:25', trigger: '定时', factsVersion: 'CRM-20260915-1025', processed: 36, added: 2, removed: 1, restored: 1, unchanged: 32, pending: 1, unassigned: 1, failed: 1, status: 'completed' }],
       pendingMappings: [{ id: 'MAP-203', crmId: 'CRM-U-203', crmName: '赵伟航', customerId: 'C-1004', customer: '云桥数字科技有限公司', opportunityId: 'OP-304', opportunity: '一键登录认证', discoveredAt: '2026-09-15 10:25', status: 'pending', reason: 'CRM 人员尚未与系统账号对应' }],
+      // R01 人员与系统账号对应关系：一行一位 CRM 人员，未对应行带自动匹配失败原因与推荐账号。
+      mappings: [
+        { crmId: 'CRM-U-201', crmName: '付赞', crmDept: '华东大区 · 号码认证', crmEmail: 'fuzan@xbongbong.com', ownerId: 'U-1004', mode: 'auto', matchedAt: '2026-09-01 09:12', customerCount: 4, opportunityCount: 6, pendingId: '', failReason: '', suggestOwnerId: '', suggestBasis: '' },
+        { crmId: 'CRM-U-202', crmName: '张云飞', crmDept: '华东大区 · 智能短信', crmEmail: 'zhangyunfei@xbongbong.com', ownerId: 'U-1005', mode: 'auto', matchedAt: '2026-09-01 09:12', customerCount: 3, opportunityCount: 5, pendingId: '', failReason: '', suggestOwnerId: '', suggestBasis: '' },
+        { crmId: 'CRM-U-203', crmName: '赵伟航', crmDept: '客户成功部 · 云桥数字', crmEmail: 'zhaoweihang@xbongbong.com', ownerId: '', mode: 'none', matchedAt: '', customerCount: 1, opportunityCount: 1, pendingId: 'MAP-203', failReason: 'CRM 邮箱与本地账号邮箱不一致，未自动匹配', suggestOwnerId: 'U-1009', suggestBasis: '姓名一致、邮箱不同，需人工确认' }
+      ],
       unassignedOpportunities: [{ id: 'UNASSIGNED-1', opportunityId: 'OP-399', customerId: 'C-1004', customer: '云桥数字科技有限公司', opportunity: '企业号码认证升级', discoveredAt: '2026-09-15 10:25', status: 'pending_crm_assignment', reason: 'CRM 未返回任何销售人员' }],
       alignmentErrors: [{ id: 'ERR-305', customerId: 'C-1005', customer: '海川保险服务有限公司', opportunityId: 'OP-305', opportunity: '保险通知通道升级', crmName: '赵伟航', stage: '人员映射', reason: '系统账号不存在或已停用', occurredAt: '2026-09-15 10:24', retryCount: 1, status: 'failed' }],
       changes: [
@@ -36,15 +42,56 @@
   }
 
   /**
+   * 构造销帮帮（XBB）连接配置演示快照。
+   * 字段与生产 xbb-config 契约对齐；sources 记录每一项当前取值来自数据库配置、环境变量还是默认值，
+   * 供运营在同步异常时先判断"配置有没有生效"，再去看同步结果。
+   */
+  function demoXbb() {
+    return {
+      baseUrl: 'https://proapi.xbongbong.com',
+      corpId: 'ww9f2c7a1e5b3d6a',
+      userId: 'U-1001',
+      tokenMasked: '••••••••••••3f9a',
+      saasMark: 1,
+      timeoutSeconds: 20,
+      listPageSize: 100,
+      retryCount: 3,
+      retryBackoffSeconds: 2,
+      intervalMinutes: 5,
+      sources: {
+        baseUrl: 'database', corpId: 'database', userId: 'database', token: 'database',
+        saasMark: 'default', timeoutSeconds: 'env', listPageSize: 'default',
+        retryCount: 'default', retryBackoffSeconds: 'default', intervalMinutes: 'fixed'
+      },
+      updatedAt: '2026-09-10 14:20',
+      updatedBy: 'U-1001',
+      lastCheck: { at: '2026-09-15 10:25', status: 'ok', latencyMs: 268, detail: '客户、商机、人员关系与客户池四类读取接口均返回正常。' }
+    };
+  }
+
+  /** 外部资料按正文计算内容指纹，用于识别重复文件；不把整份大文件写入本地演示存储。 */
+  function documentHash(text) {
+    const value = String(text || '');
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+    return 'md-' + hash.toString(36);
+  }
+  function documentUtf8Length(text) {
+    const value = String(text || '');
+    return typeof TextEncoder === 'function' ? new TextEncoder().encode(value).length : unescape(encodeURIComponent(value)).length;
+  }
+
+  /**
    * R03 外部资料样例：覆盖成功挂载、概览更新中、挂载失败和重复文件四种可复核状态。
    * 原文只属于当前空间，不跨同客户的其他销售空间共享。
    */
   function demoDocuments() {
-    return [
-      { id: 'DOC-401', space: 'WS-201', name: '星辰科技-试点方案v2.md', uploader: 'U-1010', uploadedAt: '2026-09-14 15:20', size: '48 KB', order: 1, status: 'success', stage: 'overview_done', reason: '', overviewStatus: 'applied', retryCount: 0, hash: 'h-401', excerpt: '试点范围建议限定在华东三个业务场景，先验证线路稳定性与并发容量，再评估全量接入。验收指标建议采用可用率与平均接通时长两项。' },
-      { id: 'DOC-402', space: 'WS-201', name: '并发容量测算.md', uploader: 'U-1010', uploadedAt: '2026-09-15 09:40', size: '32 KB', order: 2, status: 'overview_updating', stage: 'mounted', reason: '', overviewStatus: 'updating', retryCount: 0, hash: 'h-402', excerpt: '按客户提供的日峰值 12 万条测算，建议预留 1.8 倍冗余；当前测算未包含节假日营销场景。' },
-      { id: 'DOC-403', space: 'WS-202', name: '验收标准草案.md', uploader: 'U-1010', uploadedAt: '2026-09-15 10:05', size: '28 KB', order: 1, status: 'failed', stage: 'mount', reason: '资料解析服务超时，原文已保留，可单份重试。', overviewStatus: 'skipped', retryCount: 1, hash: 'h-403', excerpt: '验收标准草案（原文已保留，尚未挂载到客户空间）。' }
+    const docs = [
+      { id: 'DOC-401', space: 'WS-201', name: '星辰科技-试点方案v2.md', uploader: 'U-1010', uploadedAt: '2026-09-14 15:20', size: '48 KB', order: 1, status: 'success', stage: 'overview_done', reason: '', overviewStatus: 'applied', retryCount: 0, excerpt: '试点范围建议限定在华东三个业务场景，先验证线路稳定性与并发容量，再评估全量接入。验收指标建议采用可用率与平均接通时长两项。' },
+      { id: 'DOC-402', space: 'WS-201', name: '并发容量测算.md', uploader: 'U-1010', uploadedAt: '2026-09-15 09:40', size: '32 KB', order: 2, status: 'overview_updating', stage: 'mounted', reason: '', overviewStatus: 'updating', retryCount: 0, excerpt: '按客户提供的日峰值 12 万条测算，建议预留 1.8 倍冗余；当前测算未包含节假日营销场景。' },
+      { id: 'DOC-403', space: 'WS-202', name: '验收标准草案.md', uploader: 'U-1010', uploadedAt: '2026-09-15 10:05', size: '28 KB', order: 1, status: 'failed', stage: 'mount', reason: '资料解析服务超时，原文已保留，可单份重试。', overviewStatus: 'skipped', retryCount: 1, excerpt: '验收标准草案（原文已保留，尚未挂载到客户空间）。' }
     ];
+    return docs.map(doc => ({ ...doc, hash: documentHash(doc.excerpt) }));
   }
 
   /**
@@ -107,25 +154,26 @@
   }
 
   /**
-   * R10 录音样例：三方录音服务是唯一来源，本版不提供手动上传与应用内录制。
-   * 覆盖同步成功 / 同步失败 / 归属待处理三类同步结果，以及转写可用 / 等待转写两类转写情况。
+   * R10 录音样例：得到笔记（三方录音服务）是唯一来源，本版不提供手动上传与应用内录制。
+   * 三方已完成转写，同步成功即带智能总结与原文；本系统不设转写阶段，
+   * 只区分同步成功 / 同步失败 / 归属待处理三类同步结果。
    */
   function demoRecordings() {
     const transcript = '00:12  客户：我们希望先用一个业务场景验证效果。\n02:36  销售：可以，建议先确认数据范围和验收指标。\n06:48  客户：请补充峰值容量、接入步骤和交付周期。\n12:20  销售：我会联系方案同事，下次一起确认试点计划。';
-    const base = { source: '三方录音服务', syncStatus: 'synced', syncReason: '', ownerResolved: true, transcriptStatus: 'ready', transcript };
+    const base = { source: '三方录音服务', syncStatus: 'synced', syncReason: '', ownerResolved: true, transcript };
     return [
-      { ...base, id: 'MT-101', title: '线路试点技术交流', owner: 'U-1004', date: '2026-09-15 09:12', duration: '32:18', syncedAt: '2026-09-15 09:20', transcriptCheckedAt: '2026-09-15 09:26', summary: '客户技术团队完成初步验证，关注并发指标与试点计划。' },
-      { ...base, id: 'MT-102', title: '配送通知需求沟通', owner: 'U-1004', date: '2026-09-14 11:02', duration: '18:42', syncedAt: '2026-09-14 11:10', transcriptCheckedAt: '2026-09-14 11:16', summary: '客户明确华东配送通知场景，关注高峰发送量。' },
-      // 转写尚未可用：允许先归位，客户信息更新等待转写，不宣告完成。
-      { ...base, id: 'MT-103', title: '采购预算及交付确认', owner: 'U-1004', date: '2026-09-15 13:40', duration: '45:06', syncedAt: '2026-09-15 13:52', transcriptStatus: 'waiting', transcript: '', transcriptCheckedAt: '2026-09-15 15:30', summary: '' },
-      { ...base, id: 'MT-104', title: '首次产品介绍', owner: 'U-1004', date: '2026-09-14 10:05', duration: '22:37', syncedAt: '2026-09-14 10:12', transcriptCheckedAt: '2026-09-14 10:18', summary: '向客户介绍产品能力与接入方式。' },
+      { ...base, id: 'MT-101', title: '线路试点技术交流', owner: 'U-1004', date: '2026-09-15 09:12', duration: '32:18', syncedAt: '2026-09-15 09:20', summary: '客户技术团队完成初步验证，关注并发指标与试点计划。' },
+      { ...base, id: 'MT-102', title: '配送通知需求沟通', owner: 'U-1004', date: '2026-09-14 11:02', duration: '18:42', syncedAt: '2026-09-14 11:10', summary: '客户明确华东配送通知场景，关注高峰发送量。' },
+      // 常规录音：同步即带三方已完成的总结与原文，归位后立即进入客户信息更新。
+      { ...base, id: 'MT-103', title: '采购预算及交付确认', owner: 'U-1004', date: '2026-09-15 13:40', duration: '45:06', syncedAt: '2026-09-15 13:52', transcript: '00:08  客户：先按一个场景做验证，看效果再谈范围。\n03:41  销售：好的，我把验收口径和时间安排整理出来。\n09:12  客户：预算走年度框架，交付周期需要写进合同。\n16:30  销售：我下周把试点计划与合同条款一起发您确认。', summary: '客户确认先做单场景验证，预算走年度框架，交付周期需写进合同。' },
+      { ...base, id: 'MT-104', title: '首次产品介绍', owner: 'U-1004', date: '2026-09-14 10:05', duration: '22:37', syncedAt: '2026-09-14 10:12', summary: '向客户介绍产品能力与接入方式。' },
       // 一次跨客户沟通：同一份文件分别归位到两个空间，不切分、不复制。
-      { ...base, id: 'MT-105', title: '跨客户联合沟通', owner: 'U-1004', date: '2026-09-15 15:10', duration: '51:24', syncedAt: '2026-09-15 15:22', transcriptCheckedAt: '2026-09-15 15:28', summary: '一次沟通同时覆盖两个客户的通道与通知场景。' },
-      // 同步失败：可见、可重试，不静默丢失；失败期间不可归位。
-      { ...base, id: 'MT-106', title: '需求访谈录音', owner: 'U-1004', date: '2026-09-15 08:30', duration: '—', syncStatus: 'failed', syncReason: '三方录音服务返回文件读取超时，本条未同步完成。', syncedAt: '', transcriptStatus: 'waiting', transcript: '', transcriptCheckedAt: '2026-09-15 08:44', summary: '' },
-      { ...base, id: 'MT-107', title: '客户技术评审', owner: 'U-1005', date: '2026-09-14 14:20', duration: '32:18', syncedAt: '2026-09-14 14:31', transcriptCheckedAt: '2026-09-14 14:38', summary: '客户技术团队评审接入方案。' },
+      { ...base, id: 'MT-105', title: '跨客户联合沟通', owner: 'U-1004', date: '2026-09-15 15:10', duration: '51:24', syncedAt: '2026-09-15 15:22', summary: '一次沟通同时覆盖两个客户的通道与通知场景。' },
+      // 同步失败：可见、可重试，不静默丢失；未取得内容期间不可归位。
+      { ...base, id: 'MT-106', title: '需求访谈录音', owner: 'U-1004', date: '2026-09-15 08:30', duration: '—', syncStatus: 'failed', syncReason: '三方录音服务返回文件读取超时，本条未同步完成。', syncedAt: '', transcript: '', summary: '' },
+      { ...base, id: 'MT-107', title: '客户技术评审', owner: 'U-1005', date: '2026-09-14 14:20', duration: '32:18', syncedAt: '2026-09-14 14:31', summary: '客户技术团队评审接入方案。' },
       // 归属销售标识缺失：不进入任何人的录音管理，进运营待处理清单。
-      { ...base, id: 'MT-108', title: '未识别归属的客户通话', owner: '', ownerResolved: false, date: '2026-09-15 11:48', duration: '12:05', syncedAt: '2026-09-15 11:55', transcriptCheckedAt: '2026-09-15 12:01', summary: '通话内容已同步，归属销售标识缺失。', syncReason: '三方服务未返回可识别的归属销售标识。' }
+      { ...base, id: 'MT-108', title: '未识别归属的客户通话', owner: '', ownerResolved: false, date: '2026-09-15 11:48', duration: '12:05', syncedAt: '2026-09-15 11:55', summary: '通话内容已同步，归属销售标识缺失。', syncReason: '三方服务未返回可识别的归属销售标识。' }
     ];
   }
 
@@ -136,7 +184,8 @@
   function demoPlacements() {
     return [
       { id: 'PL-101', recording: 'MT-102', space: 'WS-202', opportunityId: 'OP-302', by: 'U-1004', at: '2026-09-14 11:20', status: 'done', changeId: 'CHGX-506', behaviorId: 'BR-502', failReason: '', startedAt: '2026-09-14 11:20', completedAt: '2026-09-14 11:26', canceledAt: '' },
-      { id: 'PL-102', recording: 'MT-103', space: 'WS-203', opportunityId: 'OP-303', by: 'U-1004', at: '2026-09-15 13:58', status: 'waiting_transcript', changeId: '', behaviorId: '', failReason: '', startedAt: '', completedAt: '', canceledAt: '' },
+      // 归位后客户信息更新尚未落地：只显示「客户信息更新中」，不宣告完成、不承诺时长。
+      { id: 'PL-102', recording: 'MT-103', space: 'WS-203', opportunityId: 'OP-303', by: 'U-1004', at: '2026-09-15 13:58', status: 'updating', changeId: '', behaviorId: '', failReason: '', startedAt: '2026-09-15 13:58', completedAt: '', canceledAt: '' },
       { id: 'PL-103', recording: 'MT-104', space: 'WS-204', opportunityId: 'OP-304', by: 'U-1004', at: '2026-09-14 10:20', status: 'failed', changeId: 'CHGX-508', behaviorId: '', failReason: '录音内容更新服务超时，本次更新未完成，原内容保留。', startedAt: '2026-09-14 10:20', completedAt: '', canceledAt: '' },
       { id: 'PL-104', recording: 'MT-105', space: 'WS-201', opportunityId: 'OP-301', by: 'U-1004', at: '2026-09-15 15:30', status: 'nochange', changeId: 'CHGX-509', behaviorId: 'BR-511', failReason: '', startedAt: '2026-09-15 15:30', completedAt: '2026-09-15 15:34', canceledAt: '' },
       // 客户信息写成、行为记录未写成：两条结果分开展示，成功的一条不被失败的一条覆盖。
@@ -150,7 +199,6 @@
   /** 统一补齐录音字段，兼容 R10 上线前按「上传 → 解析 → 挂载」保存的旧演示快照。 */
   function normalizeRecording(item, index) {
     const record = item || {};
-    const legacyReady = ['mounted', 'pending_alignment', 'aligning', 'no_mount'].includes(record.status);
     return {
       id: record.id || `MT-${101 + index}`,
       title: String(record.title || '未命名录音'),
@@ -162,9 +210,7 @@
       syncStatus: ['synced', 'failed'].includes(record.syncStatus) ? record.syncStatus : 'synced',
       syncReason: String(record.syncReason || ''),
       syncedAt: record.syncedAt || record.date || '',
-      // 旧快照的解析状态映射到转写情况：已进入对齐或挂载的视为转写可用，其余等待转写。
-      transcriptStatus: ['ready', 'waiting', 'failed'].includes(record.transcriptStatus) ? record.transcriptStatus : (record.transcript || legacyReady) ? 'ready' : 'waiting',
-      transcriptCheckedAt: record.transcriptCheckedAt || record.date || '',
+      // 转写与智能总结随同步一并取得；旧快照里多余的转写状态字段直接丢弃。
       transcript: String(record.transcript || ''),
       summary: String(record.summary || ''),
       retryCount: Number(record.retryCount || 0)
@@ -174,7 +220,9 @@
   /** 统一补齐归位字段；旧快照里录音的单值 space 字段会被折算成一条归位记录。 */
   function normalizePlacement(item, index) {
     const record = item || {};
-    const status = ['waiting_transcript', 'updating', 'done', 'nochange', 'failed', 'canceled'].includes(record.status) ? record.status : 'waiting_transcript';
+    // 旧快照的 waiting_transcript 迁移为 updating：本系统不设等待转写的正常路径。
+    const status = record.status === 'waiting_transcript' ? 'updating'
+      : ['updating', 'done', 'nochange', 'failed', 'canceled'].includes(record.status) ? record.status : 'updating';
     return {
       id: record.id || `PL-${101 + index}`,
       recording: record.recording || '',
@@ -198,7 +246,7 @@
   function derivePlacements(recordings, legacy) {
     return legacy.filter(item => item && item.space).map((item, index) => normalizePlacement({
       id: `PL-LEGACY-${index + 1}`, recording: item.id, space: item.space, opportunityId: '', by: item.owner || '',
-      at: item.date || '', status: item.status === 'mounted' ? 'done' : 'waiting_transcript'
+      at: item.date || '', status: item.status === 'mounted' ? 'done' : 'updating'
     }, index)).filter(item => recordings.some(record => record.id === item.recording));
   }
 
@@ -238,7 +286,7 @@
       // R14 写回的「当日汇总」使用 daily_summary 事件类型；其余事件源维持 R15 三类。
       eventType: ['followup', 'weekly_review', 'meeting', 'daily_summary'].includes(record.eventType) ? record.eventType : 'followup',
       eventId: record.eventId || '',
-      // 录音事件的 eventId 是归位记录，原文依据另存录音标识，供依据入口回到转写原文。
+      // 录音事件的 eventId 是归位记录，原文依据另存录音标识，供依据入口回到录音原文。
       sourceRef: record.sourceRef || '',
       eventAt: record.eventAt || record.createdAt || '2026-09-15 09:00',
       author: record.author || '',
@@ -255,6 +303,18 @@
     };
   }
 
+  /** 方案往来演示附件：同一条推送可同时带 Word / PDF / PPT / Markdown / Excel。 */
+  function demoSolutionAttachments() {
+    return [
+      { name: '通信线路试点建议.docx', size: '420 KB', preview: 'Word 正文：建议采用两阶段试点。第一阶段验证线路稳定性与并发容量，第二阶段覆盖正式业务场景。请客户技术负责人确认试点窗口。' },
+      { name: '通信线路试点建议.pdf', size: '1.2 MB', preview: 'PDF 封面与目录：1. 试点范围  2. 容量测算  3. 验收指标  4. 风险与回退。本文件为对外可转发版本。' },
+      { name: '试点汇报材料.pptx', size: '3.8 MB', preview: 'PPT 共 12 页：现状、试点范围、容量测算、验收口径、时间计划、需客户确认事项。适合当面讲解。' },
+      { name: '试点要点说明.md', size: '18 KB', preview: '# 试点要点\n- 先验证线路稳定性与并发容量\n- 验收指标：可用率、平均接通时长\n- 待确认：技术负责人、预计试点时间' },
+      { name: '并发容量测算.xlsx', size: '286 KB', preview: 'Excel 测算表：日峰值 12 万条，建议预留 1.8 倍冗余；未包含节假日营销场景。请周四补充峰值数据后复核。' }
+    ];
+  }
+  F.demoSolutionAttachments = demoSolutionAttachments;
+
   /**
    * 统一补齐方案协同字段，兼容 R08 上线前已经保存的旧演示快照。
    * 一条方案记录始终属于一个客户空间，附件、外链、阅读和催办状态都跟随该空间独立保存。
@@ -262,8 +322,16 @@
   function normalizeSolution(solution, index) {
     const item = solution || {};
     const attachments = Array.isArray(item.attachments)
-      ? item.attachments.map(file => ({ name: String(file.name || '未命名附件'), size: String(file.size || '演示文件') }))
-      : item.attachment ? [{ name: String(item.attachment), size: '演示文件' }] : [];
+      ? item.attachments.map(file => ({
+        name: String(file.name || '未命名附件'),
+        size: String(file.size || '演示文件'),
+        preview: String(file.preview || '')
+      }))
+      : item.attachment ? [{ name: String(item.attachment), size: '演示文件', preview: '' }] : [];
+    // 星辰科技种子方案补齐多格式附件，避免旧本地快照仍只剩一个 PDF。
+    if (item.id === 'SL-101' && attachments.length < 5) {
+      attachments.splice(0, attachments.length, ...demoSolutionAttachments());
+    }
     const readAt = item.readAt || (item.read ? item.date : '');
     const eventLog = Array.isArray(item.eventLog) && item.eventLog.length
       ? item.eventLog
@@ -418,7 +486,7 @@
               action: '与客户确认预算决策时间与验收标准。',
               evidence: [
                 { step: 'status', type: 'followup', id: 'FU-2', label: '跟进记录 · 客户拜访', at: '2026-09-14 16:30' },
-                { step: 'action', type: 'meeting', id: 'MT-103', label: '会议录音 · 采购预算及交付确认', at: '2026-09-15', transcribeReady: false }
+                { step: 'action', type: 'meeting', id: 'MT-103', label: '会议录音 · 采购预算及交付确认', at: '2026-09-15' }
               ]
             },
             {
@@ -1386,6 +1454,7 @@
     state.syncErrors = crm.alignmentErrors || [];
     state.crmErrors = crm.alignmentErrors || [];
     state.crmChanges = crm.changes || [];
+    state.crmMappings = crm.mappings || [];
     state.crmBatches = crm.batches || [];
     return state;
   }
@@ -1446,6 +1515,33 @@
     }));
   }
 
+  /**
+   * 旧快照补齐销帮帮连接配置：缺字段用演示值兜底，并保证来源标注与最近检查结果结构完整。
+   * 同步周期固定沿用 R01 口径，不随历史快照变化。
+   */
+  function normalizeXbb(value) {
+    const demo = demoXbb();
+    const source = value && typeof value === 'object' ? value : {};
+    const sources = source.sources && typeof source.sources === 'object' ? source.sources : {};
+    const positive = (input, fallback) => (Number.isFinite(Number(input)) && Number(input) > 0 ? Number(input) : fallback);
+    return {
+      ...demo,
+      ...source,
+      baseUrl: String(source.baseUrl || demo.baseUrl),
+      corpId: String(source.corpId || demo.corpId),
+      userId: String(source.userId || demo.userId),
+      tokenMasked: String(source.tokenMasked || demo.tokenMasked),
+      saasMark: positive(source.saasMark, demo.saasMark),
+      timeoutSeconds: positive(source.timeoutSeconds, demo.timeoutSeconds),
+      listPageSize: positive(source.listPageSize, demo.listPageSize),
+      retryCount: Number.isFinite(Number(source.retryCount)) && Number(source.retryCount) >= 0 ? Number(source.retryCount) : demo.retryCount,
+      retryBackoffSeconds: positive(source.retryBackoffSeconds, demo.retryBackoffSeconds),
+      intervalMinutes: demo.intervalMinutes,
+      sources: { ...demo.sources, ...sources },
+      lastCheck: source.lastCheck && typeof source.lastCheck === 'object' ? { ...demo.lastCheck, ...source.lastCheck } : demo.lastCheck
+    };
+  }
+
   function normalizeState(value) {
     if (!value || !Array.isArray(value.spaces)) return null;
     const state = copy(value);
@@ -1461,6 +1557,9 @@
     state.crm.unassignedOpportunities = Array.isArray(state.crm.unassignedOpportunities) ? state.crm.unassignedOpportunities : crm.unassignedOpportunities;
     state.crm.alignmentErrors = Array.isArray(state.crm.alignmentErrors) ? state.crm.alignmentErrors : crm.alignmentErrors;
     state.crm.changes = Array.isArray(state.crm.changes) ? state.crm.changes : crm.changes;
+    state.crm.mappings = Array.isArray(state.crm.mappings) && state.crm.mappings.length ? state.crm.mappings : crm.mappings;
+    // R01：销帮帮连接配置在同步概览展示，旧快照没有时补演示值。
+    state.xbb = normalizeXbb(state.xbb);
     state.entitlements = Array.isArray(state.entitlements) && state.entitlements.length ? state.entitlements : deriveEntitlements(state.spaces);
     state.documents = Array.isArray(state.documents) ? state.documents : demoDocuments();
     state.spaceChanges = Array.isArray(state.spaceChanges) ? state.spaceChanges : demoSpaceChanges();
@@ -1478,7 +1577,8 @@
       .filter(item => item.pushStatus && item.pushStatus !== 'not_required')
       .map(item => ({ id: 'DL-' + item.id, notification: item.id, recipient: item.recipient, type: item.type, title: item.title, channel: '移动端推送', status: item.pushStatus, reason: item.pushFailReason || '', at: item.createdAt }));
     state.assignmentMeta = state.assignmentMeta && typeof state.assignmentMeta === 'object' ? state.assignmentMeta : {};
-    state.migration = { status: 'ready', phase: '待执行', startedAt: '', snapshotAt: '', diffCount: 1, visibleRangeShrink: 1, canOpen: false, beforeSnapshot: [], afterSnapshot: [], checks: [], ...(state.migration && typeof state.migration === 'object' ? state.migration : {}) };
+    // 存量切换不再提供运营分面；旧快照里的演示状态丢弃，避免误当成可操作入口。
+    delete state.migration;
     // R13：旧快照没有今日该跟子模型时补演示数据；有部分字段时只补缺口。
     state.insight = normalizeInsight(state.insight);
     state.insightMarks = (Array.isArray(state.insightMarks) ? state.insightMarks : demoInsightMarks()).map(normalizeInsightMark);
@@ -1539,7 +1639,7 @@
       meetings: demoRecordings().map(normalizeRecording),
       placements: demoPlacements().map(normalizePlacement),
       solutions: [
-        { id: 'SL-101', space: 'WS-201', author: 'U-1010', title: '通信线路试点建议', body: '建议采用两阶段试点：先验证线路稳定性与并发容量，再覆盖正式业务场景。请确认客户技术负责人及预计试点时间。', date: '2026-09-14 10:02', attachments: [{ name: '通信线路试点建议.pdf', size: '1.2 MB' }], externalLink: 'https://example.com/solution/SL-101', read: false, reply: '', withdrawn: false, deliveryStatus: 'sent', remindCount: 1, remindedAt: '2026-09-15 09:12' },
+        { id: 'SL-101', space: 'WS-201', author: 'U-1010', title: '通信线路试点建议', body: '建议采用两阶段试点：先验证线路稳定性与并发容量，再覆盖正式业务场景。请确认客户技术负责人及预计试点时间。', date: '2026-09-14 10:02', attachments: demoSolutionAttachments(), externalLink: 'https://example.com/solution/SL-101', read: false, reply: '', withdrawn: false, deliveryStatus: 'sent', remindCount: 1, remindedAt: '2026-09-15 09:12' },
         { id: 'SL-102', space: 'WS-202', author: 'U-1010', title: '华东配送通知优化方案', body: '按通知类型拆分短信模板，先完成高峰量测算，再确定通道配置。', date: '2026-09-14 11:30', attachments: [{ name: '通知模板清单.xlsx', size: '286 KB' }], read: true, readAt: '2026-09-14 15:06', reply: '客户认可方向，周四补充峰值数据。', replyDate: '2026-09-15 09:15', replyRead: false, withdrawn: false, deliveryStatus: 'sent' },
         { id: 'SL-103', space: 'WS-207', author: 'U-1010', title: '线路接入评估说明', body: '建议完成现有线路容量评估后，再决定扩容计划。', date: '2026-09-13 15:20', read: true, readAt: '2026-09-13 16:02', reply: '', withdrawn: false, deliveryStatus: 'sent' },
         { id: 'SL-104', space: 'WS-203', author: 'U-1010', title: '已撤回的旧版容量说明', body: '这是一条用于演示撤回状态的历史方案。', date: '2026-09-12 09:20', read: false, withdrawn: true, withdrawnAt: '2026-09-12 10:05', deliveryStatus: 'withdrawn' }
@@ -1604,6 +1704,8 @@
       conversations: [{ id: 'CHAT-1', sales: 'U-1004', title: '星辰科技下一步怎么推进？', date: F.today, messages: [{ role: 'user', text: '星辰科技下一步怎么推进？' }, { role: 'assistant', text: '演示回复：已有试点意向，建议先确认验收指标及时间，并阅读空间内的通信线路试点建议。' }] }],
       config: { model: '业务默认模型', provider: 'OpenAI compatible', endpoint: 'https://api.example.com/v1', temperature: '0.3', crmInterval: '5', guidance: '优先引用客户事实；不确定时说明缺少的信息；跟进写入必须由销售确认。', sandbox: false },
       crm: demoCrm(),
+      // R01：销帮帮连接配置与 CRM 事实同步同源，首次加载也要带上，避免同步概览出现空配置。
+      xbb: demoXbb(),
       documents: demoDocuments(),
       spaceChanges: demoSpaceChanges(),
       behaviorRecords: demoBehaviorRecords(),
@@ -1621,7 +1723,6 @@
       costRows: demoCostRows(),
       datahubErrors: demoDatahubErrors(),
       entitlements: deriveEntitlements(normalized),
-      migration: { status: 'ready', phase: '待执行', startedAt: '', snapshotAt: '', diffCount: 1, visibleRangeShrink: 1, canOpen: false, beforeSnapshot: [], afterSnapshot: [], checks: [] },
       audit: []
     };
     // 提醒样例同样走一次补齐，保证首次加载与重载后的字段完全一致。
@@ -1718,32 +1819,84 @@
     });
   };
 
-  /** 上传样例覆盖成功、重复、同名不同内容、格式、空正文、超限和挂载失败七类可复核分支。 */
-  F.documentSamples = [
-    { key: 'plan', name: '客户方案要点.md', size: '46 KB', hash: 'h-new-plan', body: '本次方案聚焦三个业务场景的接入顺序，建议先完成试点验收口径确认，再进入商务谈判。' },
-    { key: 'capacity', name: '容量与成本测算.md', size: '31 KB', hash: 'h-new-capacity', body: '按客户提供的业务量测算，建议预留 1.8 倍冗余；成本随峰值阶梯计价。' },
-    { key: 'duplicate', name: '星辰科技-试点方案v2.md', size: '48 KB', hash: 'h-401', body: '与已挂载资料内容完全相同。' },
-    { key: 'samename', name: '星辰科技-试点方案v2.md', size: '52 KB', hash: 'h-new-samename', body: '同名但内容不同的修订版，作为新增资料处理。' },
-    { key: 'format', name: '客户组织架构.pdf', size: '1.2 MB', hash: 'h-new-format', invalid: 'format' },
-    { key: 'empty', name: '空白记录.md', size: '0 KB', hash: 'h-new-empty', invalid: 'empty' },
-    { key: 'oversize', name: '历史资料全量导出.md', size: '42 MB', hash: 'h-new-oversize', invalid: 'size' },
-    { key: 'mountfail', name: '验收标准草案.md', size: '28 KB', hash: 'h-new-mountfail', body: '验收标准草案正文。', mountFail: true }
-  ];
+  F.documentMaxBytes = 20 * 1024 * 1024;
   F.documentRejectReasons = { format: '仅支持 .md 格式，未提交。', empty: '正文为空，未提交。', size: '超出单文件大小限制（20 MB），未提交。' };
   F.documentStatusLabels = { success: '已挂载', overview_updating: '概览更新中', failed: '挂载失败', duplicate: '重复资料', rejected: '校验不通过' };
+  F.documentFileSize = function (bytes) {
+    const n = Number(bytes) || 0;
+    if (n >= 1048576) return `${Math.round(n / 104857.6) / 10} MB`;
+    if (n <= 0) return '0 KB';
+    return `${Math.max(1, Math.round(n / 1024))} KB`;
+  };
+  F.documentFileName = function (file) {
+    return String(file && (file.name || file.fileName) || '').trim();
+  };
+  F.isMarkdownDocument = function (file) {
+    const name = F.documentFileName(file);
+    const type = String(file && file.type || '').toLowerCase();
+    return /\.md$/i.test(name) || type === 'text/markdown' || type === 'text/x-markdown';
+  };
+  /** 把本机选择的文件整理成挂载输入；不读二进制，只取文件名、大小和正文。 */
+  F.normalizeUploadFile = function (file) {
+    if (!file || typeof file !== 'object') return null;
+    const name = F.documentFileName(file);
+    if (!name) return null;
+    const bytes = Number(file.size);
+    const body = typeof file.body === 'string' ? file.body : typeof file.text === 'string' ? file.text : '';
+    return {
+      name,
+      size: Number.isFinite(bytes) ? bytes : documentUtf8Length(body),
+      displaySize: Number.isFinite(bytes) && bytes >= 0 ? F.documentFileSize(bytes) : F.documentFileSize(documentUtf8Length(body)),
+      body,
+      type: String(file.type || '')
+    };
+  };
 
-  /** 外部资料是本版唯一的窄写入：方案人员 + 承接池内 + 空间正常，三者缺一不可。 */
+  /**
+   * 外部资料窄写入：方案人员需承接池内且空间正常；销售运营不看承接池，只要求账号可用且空间正常。
+   * 超级管理员与销售不开放上传。
+   */
   F.canUpload = function (space, state = F.load()) {
-    if (!space || F.role !== 'SOL' || space.state !== 'active') return false;
+    if (!space || space.state !== 'active') return false;
     const actor = F.actor && state.people.find(person => person.id === F.actor.id);
     if (!actor || actor.status !== 'on') return false;
+    if (F.role === 'MGR') return true;
+    if (F.role !== 'SOL') return false;
     return (state.assignments[F.actor.id] || []).includes(space.pool);
   };
   F.assertUploadable = function (space, state) {
-    if (F.role !== 'SOL') throw Error('仅解决方案人员可以上传外部资料。');
-    if (!space) throw Error('空间不在当前承接范围，或访问权限已变化。');
-    if (!(state.assignments[F.actor.id] || []).includes(space.pool)) throw Error('该空间已不在你的承接客户池范围内，本批资料未写入。');
+    if (!['SOL', 'MGR'].includes(F.role)) throw Error('仅解决方案人员或销售运营可以上传外部资料。');
+    if (!space) throw Error('空间不在当前可见范围，或访问权限已变化。');
     if (space.state !== 'active') throw Error('空间已冻结，不开放资料上传与重试。');
+    if (F.role === 'SOL' && !(state.assignments[F.actor.id] || []).includes(space.pool)) throw Error('该空间已不在你的承接客户池范围内，本批资料未写入。');
+  };
+  /** 销售运营在正常空间资料页可随时重装六层内容；冻结空间与其他角色不开放。 */
+  F.canRefreshContent = function (space, state = F.load()) {
+    if (!space || F.role !== 'MGR' || space.state !== 'active') return false;
+    const actor = F.actor && state.people.find(person => person.id === F.actor.id);
+    return !!actor && actor.status === 'on';
+  };
+  function applyContentRefresh(state, spaceId, trigger) {
+    const space = F.space(spaceId, state);
+    if (F.role !== 'MGR') throw Error('仅销售运营可以刷新全部内容。');
+    if (!space) throw Error('空间不在当前可见范围。');
+    if (space.state !== 'active') throw Error('空间已冻结，不开放全部内容更新。');
+    const uploaded = trigger === 'upload';
+    space.readiness = 'ready';
+    space.readinessReason = '';
+    space.readinessUpdatedAt = F.now();
+    if (space.failure) { space.failure.status = 'resolved'; space.failure.resolvedAt = F.now(); }
+    space.lifecycleEvents = Array.isArray(space.lifecycleEvents) ? space.lifecycleEvents : [];
+    space.lifecycleEvents.unshift({ type: 'content_refresh', at: F.now(), reason: uploaded ? '上传外部资料后自动全量更新' : '销售运营手动刷新全部内容', result: 'success' });
+    pushSpaceChange(state, space, {
+      source: 'content_refresh', sourceRef: uploaded ? 'upload' : 'manual',
+      sourceLabel: uploaded ? '外部资料上传后全量更新' : '刷新全部内容',
+      status: 'done', added: ['已按当前确权范围重装客户级信息、商机、跟进、录音、方案往来和外部资料']
+    });
+    return space;
+  }
+  F.refreshSpaceContent = function (spaceId) {
+    F.mutate('刷新空间全部内容', state => { applyContentRefresh(state, spaceId, 'manual'); });
   };
 
   /** 追加一条 R04 本次变化，并推进空间的概览版本与更新状态。 */
@@ -1784,39 +1937,47 @@
     return record;
   }
 
-  /** 逐份校验与挂载；不合格文件不提交，其余文件继续，已成功的结果不回滚。 */
-  F.uploadDocuments = function (spaceId, keys) {
-    const picked = (keys || []).map(key => F.documentSamples.find(sample => sample.key === key)).filter(Boolean);
+  /** 逐份校验与挂载本机文件；不合格文件不提交，其余文件继续，已成功的结果不回滚。 */
+  F.uploadDocuments = function (spaceId, files) {
+    const picked = (files || []).map(file => F.normalizeUploadFile(file)).filter(Boolean);
     if (!picked.length) throw Error('请至少选择一份待上传资料。');
     const results = [];
     F.mutate('上传外部资料', state => {
       const space = F.space(spaceId, state);
       F.assertUploadable(space, state);
       let order = state.documents.filter(doc => doc.space === spaceId).length;
-      picked.forEach(sample => {
-        if (sample.invalid) { results.push({ name: sample.name, status: 'rejected', reason: F.documentRejectReasons[sample.invalid] }); return; }
+      picked.forEach(file => {
+        if (!F.isMarkdownDocument(file)) { results.push({ name: file.name, status: 'rejected', reason: F.documentRejectReasons.format }); return; }
+        if (file.size > F.documentMaxBytes) { results.push({ name: file.name, status: 'rejected', reason: F.documentRejectReasons.size }); return; }
+        if (!String(file.body || '').trim()) { results.push({ name: file.name, status: 'rejected', reason: F.documentRejectReasons.empty }); return; }
         // 每份挂载前再次校验权限与空间状态；处理中失权或冻结时停止尚未挂载的文件。
         const current = F.space(spaceId, state);
-        if (!current || current.state !== 'active') { results.push({ name: sample.name, status: 'blocked', reason: '空间状态或访问权限已变化，该文件未挂载。' }); return; }
-        const same = state.documents.find(doc => doc.space === spaceId && doc.name === sample.name && doc.hash === sample.hash);
-        if (same) { results.push({ name: sample.name, status: 'duplicate', reason: '内容完全相同，未重复挂载。', ref: same.id }); return; }
-        const sameName = state.documents.some(doc => doc.space === spaceId && doc.name === sample.name);
+        if (!current || current.state !== 'active') { results.push({ name: file.name, status: 'blocked', reason: '空间状态或访问权限已变化，该文件未挂载。' }); return; }
+        const hash = documentHash(file.body);
+        const same = state.documents.find(doc => doc.space === spaceId && doc.name === file.name && doc.hash === hash);
+        if (same) { results.push({ name: file.name, status: 'duplicate', reason: '内容完全相同，未重复挂载。', ref: same.id }); return; }
+        const sameName = state.documents.some(doc => doc.space === spaceId && doc.name === file.name);
         order += 1;
+        // 本地演示只保留正文前 4000 字供查看原文；重复判定仍按完整正文指纹。
+        const excerpt = String(file.body).slice(0, 4000);
         const doc = {
-          id: F.uid('DOC'), space: spaceId, name: sample.name, uploader: F.actor.id, uploadedAt: F.now(), size: sample.size, order,
-          hash: sample.hash, excerpt: sample.body || '', retryCount: 0,
+          id: F.uid('DOC'), space: spaceId, name: file.name, uploader: F.actor.id, uploadedAt: F.now(), size: file.displaySize, order,
+          hash, excerpt, retryCount: 0,
           note: sameName ? '同名但内容不同，作为新增资料处理，未覆盖旧资料。' : '',
-          status: sample.mountFail ? 'failed' : 'success', stage: sample.mountFail ? 'mount' : 'overview_done',
-          reason: sample.mountFail ? '资料解析服务超时，原文已保留，可单份重试。' : '',
-          overviewStatus: sample.mountFail ? 'skipped' : 'applied'
+          status: 'success', stage: 'overview_done',
+          reason: '',
+          overviewStatus: 'applied'
         };
         state.documents.unshift(doc);
-        const change = pushSpaceChange(state, space, sample.mountFail
-          ? { source: 'document', sourceRef: doc.id, sourceLabel: `外部资料《${doc.name}》`, status: 'failed', reason: doc.reason }
-          : { source: 'document', sourceRef: doc.id, sourceLabel: `外部资料《${doc.name}》`, status: 'done', added: [`资料要点：${(sample.body || '').slice(0, 24)}…`], pendingConfirm: sameName ? ['同名资料存在两个版本，需确认以哪一版为准'] : [] });
+        const change = pushSpaceChange(state, space, {
+          source: 'document', sourceRef: doc.id, sourceLabel: `外部资料《${doc.name}》`, status: 'done',
+          added: [`资料要点：${excerpt.slice(0, 24)}…`],
+          pendingConfirm: sameName ? ['同名资料存在两个版本，需确认以哪一版为准'] : []
+        });
         doc.changeId = change.id;
-        results.push({ name: sample.name, status: doc.status, reason: doc.reason, id: doc.id, note: doc.note });
+        results.push({ name: file.name, status: doc.status, reason: doc.reason, id: doc.id, note: doc.note });
       });
+      if (F.role === 'MGR' && results.some(item => item.status === 'success')) applyContentRefresh(state, spaceId, 'upload');
     });
     return results;
   };
@@ -1830,11 +1991,12 @@
       const space = F.space(doc.space, state);
       if (!space) throw Error('空间不在当前可见范围。');
       if (space.state !== 'active') throw Error('空间已冻结，不开放资料重试。');
-      // 待明确事项：V1 演示按“上传者本人 + 超管兜底”开放重试入口。
-      if (!(F.role === 'ADM' || (F.role === 'SOL' && doc.uploader === F.actor.id))) throw Error('仅上传者本人或超级管理员可以重试。');
+      const canRetry = F.role === 'MGR' || (F.role === 'SOL' && doc.uploader === F.actor.id);
+      if (!canRetry) throw Error('仅上传者本人或销售运营可以重试。');
       doc.status = 'success'; doc.stage = 'overview_done'; doc.reason = ''; doc.overviewStatus = 'applied';
       doc.retryCount = Number(doc.retryCount || 0) + 1; doc.lastRetryAt = F.now();
       pushSpaceChange(state, space, { source: 'document', sourceRef: doc.id, sourceLabel: `外部资料《${doc.name}》`, status: 'done', added: [`资料要点：${(doc.excerpt || '').slice(0, 24)}…`] });
+      if (F.role === 'MGR') applyContentRefresh(state, space.id, 'upload');
     });
   };
 
@@ -1894,12 +2056,12 @@
     if (type === 'meeting') {
       const record = (state.meetings || []).find(item => item.id === id);
       if (!record) return null;
-      // 转写未就绪或同步失败时如实说明，不用摘要冒充原文。
-      const ready = record.syncStatus === 'synced' && record.transcriptStatus === 'ready';
+      // 来源内容异常时如实说明，不用摘要冒充原文；文本随同步一并取得。
+      const issue = F.recordingSourceIssue(record);
       return {
-        title: `客户录音 · ${record.title}`, body: ready ? (record.transcript || record.summary || '') : '',
-        at: record.date, author: record.ownerResolved === false ? '归属待处理' : F.name(record.owner), available: ready,
-        unavailableReason: record.syncStatus === 'failed' ? `该录音同步失败：${record.syncReason || '原文尚未进入系统。'}` : ready ? '' : '转写尚未可用，暂时无法查看原文。'
+        title: `客户录音 · ${record.title}`, body: issue ? '' : (record.transcript || record.summary || ''),
+        at: record.date, author: record.ownerResolved === false ? '归属待处理' : F.name(record.owner), available: !issue,
+        unavailableReason: issue
       };
     }
     if (type === 'solution') {
@@ -1917,13 +2079,15 @@
 
   F.changesOf = (spaceId, state = F.load()) => state.spaceChanges.filter(item => item.space === spaceId);
 
+  /** 更新历史：与跟进 Tab 同源的空间事件流，按时间倒序全量返回、不裁剪（M02-3 §4.3，0921 口径）。 */
+  F.updateHistory = (spaceId, state = F.load()) => F.changesOf(spaceId, state).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
   /* ---------- R10 录音归位与客户信息更新 ---------- */
 
-  /** 同步、转写、归位处理三条状态线分开展示，不用一个「完成」覆盖全部阶段。 */
+  /** 同步、归位处理、行为记录几条状态线分开展示，不用一个「完成」覆盖全部阶段；转写由三方完成，本系统不设转写状态。 */
   F.recordingSyncMeta = { synced: ['已同步', 'green'], failed: ['同步失败', 'amber'] };
-  F.transcriptMeta = { ready: ['转写可用', 'green'], waiting: ['等待转写', 'brand'], failed: ['转写失败', 'amber'] };
   F.placementStatusMeta = {
-    waiting_transcript: ['等待转写', 'brand'], updating: ['客户信息更新中', 'brand'],
+    updating: ['客户信息更新中', 'brand'],
     done: ['更新完成 · 有变化', 'green'], nochange: ['更新完成 · 无变化', 'neutral'],
     failed: ['更新未完成', 'amber'], canceled: ['已取消归位', 'neutral']
   };
@@ -1951,10 +2115,23 @@
   /** 归属销售标识缺失的录音不进任何人的录音管理，只进运营待处理清单，不静默丢弃。 */
   F.unresolvedRecordings = (state = F.load()) => (state.meetings || []).filter(item => item.ownerResolved === false);
 
-  /** 录音层状态：同步失败不可归位；其余按是否已有有效归位判断。处理结果按每条归位独立展示。 */
+  /**
+   * 来源内容异常：三方已完成的转写文本是后续处理的唯一输入（M05-2 §4.1、0921 口径）。
+   * 同步失败，或同步成功却没带回文本，都按来源异常处理——不归位、不进入客户信息更新，
+   * 也不伪装成「等待转写」；重新同步取得文本后按归位、空间状态与去重规则继续。
+   * @returns {string} 空串表示来源正常；否则返回可直接展示的异常说明
+   */
+  F.recordingSourceIssue = function (recording) {
+    if (!recording) return '录音不存在或不在当前可见范围。';
+    if (recording.syncStatus === 'failed') return recording.syncReason || '三方录音服务同步失败，尚未取得录音内容。';
+    if (!String(recording.transcript || '').trim()) return '三方录音服务未返回转写文本，本条来源内容异常。';
+    return '';
+  };
+
+  /** 录音层状态：来源异常不可归位；其余按是否已有有效归位判断。处理结果按每条归位独立展示。 */
   F.recordingState = function (recording, state = F.load()) {
     if (!recording) return 'unplaced';
-    if (recording.syncStatus === 'failed') return 'blocked';
+    if (F.recordingSourceIssue(recording)) return 'blocked';
     return F.recordingPlacements(recording.id, state).length ? 'placed' : 'unplaced';
   };
 
@@ -1968,6 +2145,8 @@
   F.assertPlaceable = function (state, recording, space, opportunityId) {
     if (!recording) throw Error('录音不存在或不在当前可见范围。');
     if (recording.syncStatus === 'failed') throw Error('该录音同步失败，请先重新同步后再归位。');
+    // 同步成功但没带回转写文本：同样不可归位，避免用空输入触发客户信息更新。
+    if (!String(recording.transcript || '').trim()) throw Error('该录音来源内容异常（未取得三方转写文本），请先重新同步后再归位。');
     if (F.role !== 'SLS' || recording.owner !== F.actor?.id) throw Error('录音归位由归属销售本人操作。');
     if (!space) throw Error('目标空间不在当前可见范围。');
     if (space.state === 'frozen') throw Error('空间已冻结，不可新增或取消归位。');
@@ -1980,15 +2159,14 @@
   };
 
   /**
-   * 转写可用后才开始客户信息更新；一次处理同时产出客户信息变化与一条行为记录。
-   * 冻结空间停止更新；失败保留原内容并只提醒运营；无变化只更新状态、不提醒。
+   * 归位后使用三方已同步的转写文本开始客户信息更新；一次处理同时产出客户信息变化与一条行为记录。
+   * 失败保留原内容并只提醒运营；无变化只更新状态、不提醒。
+   * 调用前已由 assertPlaceable 保证来源内容可用、空间未冻结，因此这里不再设闸门。
    */
   function runPlacementUpdate(state, placement) {
     const recording = F.recording(placement.recording, state);
     const space = state.spaces.find(item => item.id === placement.space);
     if (!recording || !space) return;
-    if (space.state === 'frozen') { placement.status = 'waiting_transcript'; placement.failReason = '空间已冻结，停止后续更新；冻结前的内容仍可只读查看。'; return; }
-    if (recording.syncStatus !== 'synced' || recording.transcriptStatus !== 'ready') { placement.status = 'waiting_transcript'; placement.failReason = ''; return; }
     const text = String(recording.transcript || recording.summary || '').trim();
     const label = `客户录音 · ${recording.title}`;
     placement.startedAt = F.now();
@@ -2012,7 +2190,7 @@
     if (behavior) placement.behaviorId = behavior.id;
   }
 
-  /** 建立一条归位：锚定一个空间与一条商机；转写可用时立即进入客户信息更新。 */
+  /** 建立一条归位：锚定一个空间与一条商机；来源内容可用时立即进入客户信息更新。 */
   F.placeRecording = function (recordingId, input) {
     let created = null;
     F.mutate('录音归位', state => {
@@ -2021,7 +2199,7 @@
       F.assertPlaceable(state, recording, space, input.opportunityId);
       const placement = normalizePlacement({
         id: F.uid('PL'), recording: recording.id, space: space.id, opportunityId: input.opportunityId,
-        by: F.actor.id, at: F.now(), status: 'waiting_transcript'
+        by: F.actor.id, at: F.now(), status: 'updating'
       });
       state.placements.unshift(placement);
       runPlacementUpdate(state, placement);
@@ -2045,7 +2223,10 @@
     });
   };
 
-  /** 同步失败重新同步：单条失败不影响其余录音；成功后回到可归位状态。 */
+  /**
+   * 同步失败后重新同步：单条失败不影响其余录音。
+   * 成功后取回三方已有的智能总结与原文，回到可归位状态；未取得文本时保持来源异常，不伪装成等待转写。
+   */
   F.retryRecordingSync = function (recordingId) {
     F.mutate('重新同步录音', state => {
       const recording = F.recording(recordingId, state);
@@ -2056,23 +2237,26 @@
       recording.syncReason = '';
       recording.syncedAt = F.now();
       recording.retryCount = Number(recording.retryCount || 0) + 1;
-      recording.transcriptStatus = 'waiting';
-      recording.transcriptCheckedAt = F.now();
+      recording.transcript = recording.transcript || '00:14  客户：这次先对齐需求边界，方案下周给到。\n05:20  销售：我按今天确认的范围整理一版。';
+      recording.summary = recording.summary || '客户确认需求边界，方案下周给到。';
     });
   };
 
-  /** 演示按钮：转写可用后，这份录音所有等待中的归位各自独立进入客户信息更新。 */
-  F.markTranscriptReady = function (recordingId) {
-    F.mutate('录音转写完成演示', state => {
-      const recording = F.recording(recordingId, state);
-      if (!recording) throw Error('录音不存在，请刷新后重试。');
-      if (recording.syncStatus !== 'synced') throw Error('该录音尚未同步成功，转写不可用。');
-      if (recording.transcriptStatus === 'ready') throw Error('该录音的转写已可用。');
-      recording.transcriptStatus = 'ready';
-      recording.transcriptCheckedAt = F.now();
-      recording.transcript = recording.transcript || '00:08  客户：先按一个场景做验证，看效果再谈范围。\n03:41  销售：好的，我把验收口径和时间安排整理出来。\n09:12  客户：预算走年度框架，交付周期需要写进合同。';
-      recording.summary = recording.summary || '客户确认先做单场景验证，预算走年度框架。';
-      F.recordingPlacements(recording.id, state).filter(item => item.status === 'waiting_transcript').forEach(item => runPlacementUpdate(state, item));
+  /**
+   * 演示口径：把一条「客户信息更新中」的归位推进到实际结果。
+   * 原型不做真实异步处理，用这个入口演示更新完成后产出本次变化与行为记录；
+   * 真实环境由服务端在处理完成时回填，页面不承诺固定时长。
+   */
+  F.completePlacementUpdate = function (placementId) {
+    F.mutate('录音客户信息更新完成演示', state => {
+      const placement = (state.placements || []).find(item => item.id === placementId);
+      if (!placement) throw Error('该归位不存在，请刷新后重试。');
+      if (placement.status !== 'updating') throw Error('该归位不在客户信息更新中。');
+      const space = F.space(placement.space, state);
+      if (!space) throw Error('目标空间不在当前可见范围。');
+      if (space.state === 'frozen') throw Error('空间已冻结，客户信息停更。');
+      if (!(['ADM', 'MGR'].includes(F.role) || (F.role === 'SLS' && placement.by === F.actor?.id))) throw Error('仅归位人本人、销售运营或超级管理员可以推进。');
+      runPlacementUpdate(state, placement);
     });
   };
 
@@ -2567,7 +2751,9 @@
       const matched = F.quickQuestions.find(([, label]) => label === text);
       // 自由提问只在问题明确指向某个概览板块时作答；否则按无依据处理，不推测。
       const panel = matched ? panels.find(item => item.key === matched[0]) : panels.find(item => item.text && text.includes(item.title));
-      const hasEvidence = !!(panel && panel.text && panel.sources.some(source => source.available !== false));
+      // 依据是否充分看板块有没有内容：板块正文本身就是本空间可查看的依据，
+      // 原文出处是「有则附上」，不是作答前提（与概览渲染同一口径，M05-3 §4.3 第 4 条）。
+      const hasEvidence = !!(panel && panel.text);
       answer = {
         id: F.uid('QA'), space: spaceId, question: text, at: F.now(), hasEvidence,
         answer: hasEvidence ? panel.text : '当前空间内没有可用依据，无法回答这个问题。',
@@ -2577,6 +2763,19 @@
       state.spaceQA.unshift(answer);
     });
     return answer;
+  };
+
+  /**
+   * 丢弃一条空间问答：供「重新生成」使用，避免旧答案留在历史里形成重复。
+   * 只允许丢弃本空间确实存在的那一条。
+   */
+  F.discardSpaceQA = function (spaceId, qaId) {
+    F.mutate('丢弃一条空间问答', state => {
+      const list = Array.isArray(state.spaceQA) ? state.spaceQA : [];
+      const index = list.findIndex(item => item.id === qaId && item.space === spaceId);
+      if (index < 0) throw Error('这条问答已不在当前空间的历史里。');
+      list.splice(index, 1);
+    });
   };
 
   /* ---------- R05 角色可见边界 ---------- */
@@ -2595,7 +2794,7 @@
     const spaces = valid ? F.visible(state) : [];
     const pools = F.role === 'SOL' ? (state.assignments[F.actor?.id] || []) : [];
     const read = { ADM: '全部空间完整只读', MGR: '全部空间完整只读', SLS: '客户级信息全量 + 本人确权商机', SOL: '承接客户池内空间完整内容' }[F.role] || '无';
-    const write = { ADM: '系统配置与异常处置，不写入客户经营内容', MGR: '销售目标录入与调整；客户经营内容只读', SLS: '本人正常空间的跟进与方案回复', SOL: '承接池内正常空间的外部 .md 上传' }[F.role] || '无';
+    const write = { ADM: '系统配置与异常处置，不写入客户经营内容', MGR: '销售目标录入与调整；正常空间资料页可上传外部 .md 并刷新全部内容', SLS: '本人正常空间的跟进与方案回复', SOL: '承接池内正常空间的外部 .md 上传' }[F.role] || '无';
     return {
       valid, actor, role: F.role, roleLabel: F.roles[F.role] || '未知角色',
       reason: !actor ? '演示身份不存在' : actor.status !== 'on' ? '账号已停用，读取与写入均被拒绝' : actor.role !== F.role ? '当前入口角色与账号角色不一致' : '',
@@ -2680,6 +2879,9 @@
       if (!mapping || mapping.status === 'resolved') throw Error('该待对应事项已处理或不存在。');
       if (!person) throw Error('请选择启用中的销售账号。');
       mapping.status = 'resolved'; mapping.resolvedTo = person.id; mapping.resolvedName = person.name; mapping.resolvedAt = F.now();
+      // 对应关系表与待对应清单同源：处理完成后同步回写对应方式与时间，避免两处状态不一致。
+      const mappingRow = (crm.mappings || []).find(item => item.crmId === mapping.crmId);
+      if (mappingRow) { mappingRow.ownerId = person.id; mappingRow.mode = 'manual'; mappingRow.matchedAt = F.now(); mappingRow.failReason = ''; }
       crm.pending = Math.max(0, (crm.pending || 1) - 1);
       crm.changes = crm.changes || [];
       const change = crm.changes.find(item => item.id === 'CHG-304' && item.change === 'pending');
@@ -2714,31 +2916,80 @@
     });
   };
 
-  /** 存量切换按“快照 → 新模型 → 回归校验 → 开放”推进；初始样例故意保留一条阻断差异。 */
-  F.runMigrationCheck = function () {
-    if (F.role !== 'ADM') throw Error('仅超级管理员可以执行存量切换。');
-    F.mutate('执行 CRM 存量切换校验', state => {
-      const migration = state.migration || (state.migration = {});
-      const spaces = state.spaces || [];
-      migration.startedAt = migration.startedAt || F.now(); migration.snapshotAt = F.now(); migration.phase = '回归校验';
-      migration.beforeSnapshot = migration.beforeSnapshot?.length ? migration.beforeSnapshot : spaces.map(space => ({ sales: space.sales, customerId: space.customerId, pool: space.pool, spaceId: space.id }));
-      migration.afterSnapshot = spaces.map(space => ({ sales: space.sales, customerId: space.customerId, pool: space.pool, spaceId: space.id }));
-      migration.diffCount = Number(migration.diffCount || 0); migration.visibleRangeShrink = migration.diffCount;
-      migration.checks = migration.diffCount ? [{ sales: '张云飞', before: 3, after: 2, diff: '少 1 个空间', status: 'failed' }] : [{ sales: '付赞', before: 6, after: 6, diff: '无缩小', status: 'passed' }];
-      migration.status = migration.diffCount ? 'blocked' : 'validated'; migration.canOpen = !migration.diffCount;
-      migration.lastResult = migration.diffCount ? '发现范围差异，已暂停开放新模型。' : '回归校验通过，可开放新模型。';
+  /**
+   * 采用推荐账号完成人员对应：与手动设置对应走同一条补建链路，
+   * 只在演示层多一步"推荐依据"确认，避免运营在只看账号不看后果的情况下提交。
+   */
+  F.acceptCrmSuggestion = function (pendingId) {
+    const state = F.load();
+    const row = (state.crm?.mappings || []).find(item => item.pendingId === pendingId);
+    if (!row) throw Error('该待对应事项不存在，请刷新后重试。');
+    if (!row.suggestOwnerId) throw Error('该条没有可采用的推荐账号，请手动设置对应。');
+    F.resolveCrmMapping(pendingId, row.suggestOwnerId);
+    return F.name(row.suggestOwnerId);
+  };
+
+  /** 更换已有对应关系：只改下一次同步的补建目标，不回溯已生成的确权与空间。 */
+  F.changeCrmMapping = function (crmId, salesId) {
+    if (F.role !== 'ADM') throw Error('仅超级管理员可以修改 CRM 人员对应关系。');
+    F.mutate('更换 CRM 人员对应账号', state => {
+      const crm = state.crm || (state.crm = demoCrm());
+      const row = (crm.mappings || []).find(item => item.crmId === crmId);
+      const person = state.people.find(item => item.id === salesId && item.role === 'SLS' && item.status === 'on');
+      if (!row) throw Error('对应记录不存在，请刷新后重试。');
+      if (!person) throw Error('请选择启用中的销售账号。');
+      if (row.ownerId === person.id) throw Error('该账号已是当前对应账号，无需更换。');
+      row.ownerId = person.id; row.mode = 'manual'; row.matchedAt = F.now(); row.failReason = '';
     });
   };
-  F.fixMigrationDiff = function () {
-    if (F.role !== 'ADM') throw Error('仅超级管理员可以修复存量切换差异。');
-    F.mutate('修复存量切换范围差异', state => { state.migration = state.migration || {}; state.migration.diffCount = 0; state.migration.visibleRangeShrink = 0; state.migration.phase = '待重新校验'; state.migration.status = 'ready'; state.migration.canOpen = false; });
-  };
-  F.openMigration = function () {
-    if (F.role !== 'ADM') throw Error('仅超级管理员可以开放新确权模型。');
-    F.mutate('开放 CRM 新确权模型', state => {
-      if (!state.migration?.canOpen || state.migration.status !== 'validated') throw Error('范围回归校验未通过，暂不能开放新模型。');
-      state.migration.status = 'open'; state.migration.phase = '开放消费'; state.migration.openedAt = F.now(); state.migration.lastResult = '新确权模型已开放消费。';
+
+  /** 保存销帮帮连接配置：仅超管可写；接口凭据只保存脱敏值，明文由服务端管理。 */
+  F.saveXbbConfig = function (values) {
+    if (F.role !== 'ADM') throw Error('仅超级管理员可以修改销帮帮连接配置。');
+    const baseUrl = String(values.baseUrl || '').trim();
+    if (!/^https?:\/\//.test(baseUrl)) throw Error('接口地址需以 http:// 或 https:// 开头。');
+    const corpId = String(values.corpId || '').trim();
+    const userId = String(values.userId || '').trim();
+    if (!corpId) throw Error('企业 Corp ID 为必填项。');
+    if (!userId) throw Error('操作人 User ID 为必填项。');
+    const positive = (input, label, max) => {
+      const value = Number(input);
+      if (!Number.isInteger(value) || value <= 0 || value > max) throw Error(`${label} 需为 1～${max} 的整数。`);
+      return value;
+    };
+    const payload = {
+      baseUrl, corpId, userId,
+      saasMark: positive(values.saasMark, 'SaaS Mark', 99),
+      timeoutSeconds: positive(values.timeoutSeconds, '请求超时', 120),
+      listPageSize: positive(values.listPageSize, '分页大小', 500),
+      retryCount: positive(values.retryCount, '重试次数', 10),
+      retryBackoffSeconds: positive(values.retryBackoffSeconds, '重试退避', 60)
+    };
+    F.mutate('更新销帮帮连接配置', state => {
+      const xbb = state.xbb || (state.xbb = demoXbb());
+      xbb.sources = xbb.sources || {};
+      Object.assign(xbb, payload);
+      // 本次手工维护过的字段来源标记为数据库配置，未改动项保留原来源。
+      Object.keys(payload).forEach(key => { xbb.sources[key] = 'database'; });
+      xbb.updatedAt = F.now();
+      xbb.updatedBy = F.actor?.id || '';
     });
+  };
+
+  /** 连通性检查：原型只做配置完整性校验，不发起真实外网请求；缺项时明确列出缺哪几项。 */
+  F.checkXbbConnection = function () {
+    if (!['ADM', 'MGR'].includes(F.role)) throw Error('仅超级管理员或销售运营可以发起连通性检查。');
+    let result;
+    F.mutate('检查销帮帮连通性', state => {
+      const xbb = state.xbb || (state.xbb = demoXbb());
+      const missing = [['接口地址', xbb.baseUrl], ['企业 Corp ID', xbb.corpId], ['操作人 User ID', xbb.userId], ['接口 Token', xbb.tokenMasked]]
+        .filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+      result = missing.length
+        ? { at: F.now(), status: 'failed', latencyMs: 0, detail: `缺少必填配置：${missing.join('、')}；同步会停在待配置状态，不会清空已有确权。` }
+        : { at: F.now(), status: 'ok', latencyMs: 264, detail: '客户、商机、人员关系与客户池四类读取接口均返回正常。' };
+      xbb.lastCheck = result;
+    });
+    return result;
   };
 
   /** 重试空间内容装载；成功后只恢复内容就绪度，不越过冻结边界。 */
@@ -2968,7 +3219,7 @@
         : `最近沟通停留在 ${latest ? String(latest.date).slice(0, 10) : '更早'}，暂无新进展。`;
     const evidence = [];
     if (latest) evidence.push({ step: 'status', type: 'followup', id: latest.id, label: `跟进记录 · ${latest.type}`, at: latest.date });
-    if (meetings[0]) evidence.push({ step: 'ranking', type: 'meeting', id: meetings[0].id, label: `客户录音 · ${meetings[0].title}`, at: meetings[0].date, transcribeReady: meetings[0].transcriptStatus === 'ready' });
+    if (meetings[0]) evidence.push({ step: 'ranking', type: 'meeting', id: meetings[0].id, label: `客户录音 · ${meetings[0].title}`, at: meetings[0].date });
     if (solutions[0]) evidence.push({ step: 'action', type: 'solution', id: solutions[0].id, label: `方案往来 · ${solutions[0].title}`, at: solutions[0].date });
     else if (docs[0]) evidence.push({ step: 'action', type: 'document', id: docs[0].id, label: `外部资料 · ${docs[0].name}`, at: docs[0].uploadedAt });
     return { space: space.id, customer: space.customer, status, summary, action: latest?.next || '与客户确认下一步安排。', evidence };

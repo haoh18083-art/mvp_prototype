@@ -20,7 +20,7 @@ git push origin main
 
 每次推送到 `main`，GitHub Actions 都会自动发布。等待最新发布记录显示成功后，刷新公网链接即可查看新版本。本地保存文件或仅提交而未推送，不会更新网站。在 GitHub 网页直接编辑文件并提交到 `main` 也会触发发布。
 
-发布前会检查 JavaScript 语法。网站仅打包登录入口 `index.html`、评审导航 `prototype.html`、`css/`、`js/` 和 `pages/`，测试、工具脚本（`tools/`）和说明文件留在仓库中。线上 `version.json` 记录当前部署的提交编号，可用于核对线上版本。
+发布前会检查 JavaScript 语法。网站打包登录入口 `index.html`、评审导航 `prototype.html`、`css/`、`js/`、`pages/` 和移动端 `mobile-ios-sales-assistant/`，测试、工具脚本（`tools/`）和说明文件留在仓库中。线上 `version.json` 记录当前部署的提交编号与中文版本名，可用于核对线上版本。
 
 ## 手动重新发布
 

@@ -22,6 +22,18 @@ function fill(t, name, value) { const n = t.doc.querySelector('[name="' + name +
 function change(t, name, value) { const n = t.doc.querySelector('[name="' + name + '"]'); assert.ok(n, name); n.value = value; n.dispatchEvent(new t.w.Event('change', { bubbles: true })); }
 function submit(t, selector = '.fp-overlay form') { const form = t.doc.querySelector(selector); assert.ok(form, selector); form.dispatchEvent(new t.w.Event('submit', { bubbles: true, cancelable: true })); }
 
+/** 读取单元格正文，忽略窄屏字段标签，便于断言列内容而不受响应式标签影响。 */
+function cellText(cell) {
+  const copy = cell.cloneNode(true);
+  copy.querySelector('.fp-table-cell-label')?.remove();
+  return copy.textContent.trim();
+}
+
+/** 读取当前作用域内第一张表的 caption，用于断言某个分面只剩哪一张表。 */
+function settingTableCaption(scope) {
+  return scope.querySelector('.fp-table-shell table caption')?.textContent.trim() || '';
+}
+
 /** 验证 F.table 输出的可访问表格契约，并返回数据行数量。 */
 function assertFeatureTable(scope, expectedCaption, context) {
   const shell = scope.querySelector('.fp-table-shell');
@@ -40,7 +52,7 @@ function assertFeatureTable(scope, expectedCaption, context) {
   assert.equal(new Set(headers.map(header => header.id)).size, headers.length, `${context}: 列头 id 应唯一`);
   assert.ok(headers.every(header => header.id && header.scope === 'col'), `${context}: 列头语义`);
 
-  const rows = [...table.querySelectorAll('tbody tr:not(.is-empty)')];
+  const rows = [...table.querySelectorAll('tbody tr:not(.is-empty)')].filter(row => !row.hasAttribute('data-crm-map-detail-row'));
   assert.equal(Number(shell.dataset.rowCount), rows.length, `${context}: data-row-count`);
   assert.ok(Number.isInteger(Number(shell.dataset.totalCount)), `${context}: data-total-count 应为整数`);
   assert.ok(Number(shell.dataset.totalCount) >= rows.length, `${context}: 总数不应小于当前行数`);
@@ -80,10 +92,10 @@ test('feature pages load the responsive table styles and current feature script 
     const styles = [...doc.querySelectorAll('link[rel="stylesheet"]')].map(node => node.getAttribute('href'));
     const featureScripts = [...doc.querySelectorAll('script[src^="../js/features/"]')].map(node => node.getAttribute('src'));
 
-    assert.ok(styles.includes('../css/features.css?v=20260921-r0910'), `${page}: 缺少功能页基础样式`);
+    assert.ok(styles.includes('../css/features.css?v=20260922-r07-dispatch'), `${page}: 缺少功能页基础样式`);
     assert.ok(styles.includes('../css/features-container.css?v=20260920-people-r2'), `${page}: 缺少表格容器响应样式`);
     assert.equal(featureScripts.length, 11, `${page}: 功能脚本数量`);
-    assert.ok(featureScripts.every(src => src.endsWith('?v=20260921-r0910')), `${page}: 功能脚本缓存版本未同步`);
+    assert.ok(featureScripts.every(src => src.endsWith('?v=20260922-r07-dispatch') || src.endsWith('?v=20260921-r1900-insight-ops') || (page === 'insight-ops' && src === '../js/features/insights.js?v=20260922-workbench')), `${page}: 功能脚本缓存版本未同步`);
   }
 });
 
@@ -191,7 +203,8 @@ test('recording placement writes one change per space, survives reload, and refu
   const t = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-101');
   let saved;
   try {
-    // 从录音详情发起归位：WS-201 只有一条商机，自动带出后直接确认
+    // 从录音详情发起归位：详情默认落在录音内容，先切到「归位与处理结果」；WS-201 只有一条商机，自动带出后直接确认
+    click(t, '.fp-overlay [data-tab="placements"]');
     click(t, '.fp-overlay [data-action="place"]');
     submit(t, '.fp-overlay:last-of-type form');
     const state = t.F.load();
@@ -219,7 +232,7 @@ test('search, model validation and drawer keyboard dismissal work without runtim
   try {
     fill(t, 'q', '星辰'); submit(t, '[data-search]');
     assert.equal(t.doc.querySelectorAll('.fp-table tbody tr').length, 2);
-    click(t, '[type=reset]'); assert.equal(t.doc.querySelectorAll('.fp-table tbody tr').length, 9);
+    click(t, '[type=reset]'); assert.equal(t.doc.querySelectorAll('.fp-table tbody tr').length, 5, '清除筛选后回到第一页');
   } finally { t.close(); }
   const cfg = load('operations-config', '?role=ADM&as=U-1001');
   try {
@@ -239,7 +252,7 @@ test('search, model validation and drawer keyboard dismissal work without runtim
 test('customer directory gives immediate, removable and accessible filter feedback', () => {
   const t = load('customer-spaces', '?role=MGR&as=U-1002');
   try {
-    assert.equal(t.doc.querySelector('[data-result-count]').textContent, '9 个空间');
+    assert.equal(t.doc.querySelector('[data-result-count]').textContent, '9 个空间 · 第 1 / 2 页');
     assert.equal(t.doc.querySelector('[type=reset]').disabled, true);
     assert.equal(t.doc.querySelector('.fp-directory-table-wrap').getAttribute('role'), 'region');
     assert.equal(t.doc.querySelector('.fp-directory-table-wrap').getAttribute('aria-labelledby'), 'customer-space-list-title');
@@ -254,7 +267,7 @@ test('customer directory gives immediate, removable and accessible filter feedba
     assert.equal(t.doc.querySelector('[type=reset]').disabled, false);
 
     click(t, '[data-remove-filter="q"]');
-    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 9);
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 5, '9 个空间按 5 条一页分两页');
     assert.equal(t.doc.querySelector('[data-filter-feedback]').hidden, true);
 
     change(t, 'pool', '号码认证池');
@@ -265,10 +278,29 @@ test('customer directory gives immediate, removable and accessible filter feedba
     assert.equal(t.doc.querySelectorAll('[data-remove-filter]').length, 2);
 
     click(t, '[type=reset]');
-    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 9);
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 5, '清除筛选回到第一页');
     assert.equal(t.doc.querySelector('[name=pool]').value, '');
     assert.equal(t.doc.querySelector('[name=status]').value, '');
     assert.equal(t.doc.querySelector('[type=reset]').disabled, true);
+
+    // 分页：9 个空间按 5 条一页分两页，翻页只改页码、不动筛选条件，筛选后回到第一页
+    const page = () => t.doc.querySelector('.fp-pagination');
+    assert.ok(page(), '目录展示分页条');
+    assert.match(page().textContent, /第 1 \/ 2 页 · 共 9 个空间/);
+    assert.equal(page().querySelector('[data-action="space-page"][data-value="prev"]').disabled, true, '首页上一页禁用');
+    assert.equal(page().querySelector('[data-action="space-page"][data-value="next"]').disabled, false);
+    click(t, '[data-action="space-page"][data-value="next"]');
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 4, '第二页 4 条');
+    assert.match(page().textContent, /第 2 \/ 2 页/);
+    assert.equal(t.doc.querySelector('[data-result-count]').textContent, '9 个空间 · 第 2 / 2 页');
+    assert.equal(page().querySelector('[data-action="space-page"][data-value="next"]').disabled, true, '末页下一页禁用');
+    click(t, '[data-action="space-page"][data-value="prev"]');
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 5, '返回第一页');
+    click(t, '[data-action="space-page"][data-value="next"]');
+    change(t, 'status', 'active');
+    assert.equal(page().querySelector('.fp-pagination, [data-action="space-page"][data-value="prev"]').disabled ?? true, true, '筛选后回到第一页（上一页禁用）');
+    assert.match(page().textContent, /第 1 \/ /);
+    click(t, '[type=reset]');
 
     const longKeyword = '这是一个用于验证移动端超长关键词不会撑破筛选区域的测试内容';
     fill(t, 'q', longKeyword); submit(t, '[data-search]');
@@ -278,7 +310,7 @@ test('customer directory gives immediate, removable and accessible filter feedba
     assert.equal(keywordChip.querySelector('span').textContent, `关键词：${longKeyword}`);
     assert.ok(keywordChip.querySelector('.ico'));
     t.doc.querySelector('[name=q]').dispatchEvent(new t.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 9);
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 5, 'Escape 清空关键词后回到第一页');
     assert.equal(t.doc.querySelector('[name=q]').value, '');
     assert.deepEqual(t.errors, []);
   } finally { t.close(); }
@@ -294,7 +326,7 @@ test('customer search debounce respects IME composition and reset cancellation',
     search.dispatchEvent(new t.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true }));
     search.dispatchEvent(new t.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, isComposing: true }));
     assert.equal(search.value, 'ws-201');
-    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 9);
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 5, '输入法组合期间不触发筛选，仍停在第一页');
 
     search.dispatchEvent(new t.w.CompositionEvent('compositionend', { bubbles: true }));
     await new Promise(resolve => t.w.setTimeout(resolve, 330));
@@ -304,7 +336,7 @@ test('customer search debounce respects IME composition and reset cancellation',
     search.dispatchEvent(new t.w.InputEvent('input', { bubbles: true }));
     click(t, '[type=reset]');
     await new Promise(resolve => t.w.setTimeout(resolve, 330));
-    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 9);
+    assert.equal(t.doc.querySelectorAll('.fp-directory-table tbody tr').length, 5, '清除筛选回到第一页');
     assert.equal(search.value, '');
     assert.deepEqual(t.errors, []);
   } finally { t.close(); }
@@ -360,12 +392,12 @@ test('platform data tables keep the shared contract in all three tabs', () => {
 });
 
 test('operations tables keep the shared contract in every table-bearing view', () => {
-  const t = load('operations-config', '?role=ADM&as=U-1001');
+  // CRM 对应关系表已迁入待对应人员分面，不再随同步概览渲染。
+  const t = load('operations-config', '?role=ADM&as=U-1001&crmView=pending');
   const tabs = [
     ['crm', 'CRM 人员与系统账号对应关系'],
     ['notify', '提醒事件与接收人清单'],
     ['openclaw', 'OpenClaw 专属 Agent 运行与路由状态'],
-    ['levels', '客户等级及经营优先级规则'],
     ['pools', '解决方案人员承接客户池配置']
   ];
   try {
@@ -537,7 +569,7 @@ test('shared search cancels a stale debounce when tabs replace the filter form',
   } finally { t.close(); }
 });
 
-test('R01 CRM 归属同步拆分待对应、未分配和异常，并支持切换校验', () => {
+test('R01 CRM 归属同步拆分待对应、未分配和异常，不提供存量切换分面', () => {
   const t = load('operations-config', '?role=ADM&as=U-1001&tab=crm');
   try {
     const settings = t.doc.querySelector('[data-settings]');
@@ -546,7 +578,6 @@ test('R01 CRM 归属同步拆分待对应、未分配和异常，并支持切换
     assert.ok(settings.querySelector('[data-crm-metric="added"]'));
     assert.ok(settings.querySelector('[data-crm-metric="removed"]'));
     assert.ok(settings.querySelector('[data-crm-metric="retry-next"]'));
-    assert.ok(assertFeatureTable(settings, 'CRM 人员与系统账号对应关系', 'R01 人员对应表') > 0);
     assert.ok(settings.querySelector('[data-crm-result]'));
 
     const beforeBatches = t.F.load().crm.batches.length;
@@ -555,7 +586,8 @@ test('R01 CRM 归属同步拆分待对应、未分配和异常，并支持切换
     assert.equal(t.F.load().crm.trigger, '手动');
 
     click(t, '[data-action="crm-view"][data-value="pending"]');
-    assert.equal(t.doc.querySelectorAll('[data-crm-pending-list] [data-crm-row]').length, 1);
+    assert.equal(assertFeatureTable(t.doc.querySelector('[data-settings]'), 'CRM 人员与系统账号对应关系', 'R01 人员对应表'), 3, '待对应分面承载人员对应表');
+    assert.equal(t.doc.querySelectorAll('[data-crm-mapping-row][data-status="pending"]').length, 1);
     click(t, '[data-action="crm-map"][data-value="MAP-203"]');
     change(t, 'mappedOwner', 'U-1004');
     submit(t);
@@ -569,15 +601,201 @@ test('R01 CRM 归属同步拆分待对应、未分配和异常，并支持切换
     assert.equal(t.F.load().crm.alignmentErrors.find(item => item.id === errorRow.dataset.id).status, 'resolved');
     assert.equal(t.F.load().crm.failed, 0);
 
-    click(t, '[data-action="crm-view"][data-value="cutover"]');
-    click(t, '[data-action="cutover-start"]');
-    assert.equal(t.F.load().migration.status, 'blocked');
-    assert.equal(t.F.load().migration.canOpen, false);
-    click(t, '[data-action="cutover-fix"]');
-    click(t, '[data-action="cutover-start"]');
-    assert.equal(t.F.load().migration.status, 'validated');
-    click(t, '[data-action="cutover-open"]');
-    assert.equal(t.F.load().migration.status, 'open');
+    const crmViews = [...t.doc.querySelectorAll('[data-action="crm-view"]')].map(node => node.dataset.value);
+    assert.deepEqual(crmViews, ['overview', 'pending', 'unassigned', 'errors', 'history'], 'CRM 分面不含存量切换');
+    assert.equal(t.doc.querySelector('[data-action="crm-view"][data-value="cutover"]'), null);
+    assert.equal(t.doc.querySelector('[data-cutover-state]'), null);
+    assert.equal(t.doc.querySelector('[data-action="cutover-start"]'), null);
+    assert.equal(t.F.load().migration, undefined, '存量切换演示状态不再进入本地快照');
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
+
+  const cutover = load('operations-config', '?role=ADM&as=U-1001&tab=crm&crmView=cutover');
+  try {
+    assert.ok(cutover.doc.querySelector('[data-action="crm-view"][data-value="overview"].is-active'), '旧深链回落到同步概览');
+    assert.ok(cutover.doc.querySelector('[data-crm-metric="last-sync"]'));
+    assert.equal(cutover.doc.querySelector('[data-cutover-state]'), null);
+    assert.deepEqual(cutover.errors, []);
+  } finally { cutover.close(); }
+});
+
+test('R01 同步概览展示销帮帮配置与来源，人员对应按看到-get 到-操作组织', () => {
+  const t = load('operations-config', '?role=ADM&as=U-1001&tab=crm');
+  try {
+    const settings = t.doc.querySelector('[data-settings]');
+
+    // 1.1 销帮帮连接配置：概览不再放连接状态条，「查看连接配置」在页签行「查看本轮批次」之后，检查连通性只在抽屉内
+    assert.equal(settings.querySelector('[data-xbb-strip]'), null, '同步概览不再保留连接状态条');
+    assert.doesNotMatch(settings.textContent, /最近检查通过/);
+    assert.doesNotMatch(settings.textContent, /必填项完整/);
+    assert.doesNotMatch(settings.textContent, /proapi\.xbongbong\.com/);
+    assert.equal(settings.querySelector('[data-action="xbb-check"]'), null, '检查连通性不在概览');
+    assert.equal(settings.querySelectorAll('.fp-xbb-field').length, 0, '配置明细不占用同步概览');
+    const toolbarButtons = [...settings.querySelectorAll('[data-crm-toolbar] [data-action]')].map(node => node.dataset.action);
+    assert.deepEqual(toolbarButtons, ['crm-sync', 'crm-batch', 'xbb-open'], '查看连接配置紧随查看本轮批次');
+
+    click(t, '[data-action="xbb-open"]');
+    const drawer = t.doc.querySelector('[data-xbb-config]');
+    assert.ok(drawer, '连接配置在抽屉内展示');
+    assert.equal(drawer.querySelectorAll('.fp-xbb-field').length, 10, '配置项数量');
+    assert.equal(drawer.querySelectorAll('.fp-xbb-field .badge').length, 10, '每项标注取值来源');
+    assert.match(drawer.textContent, /数据库配置/);
+    assert.match(drawer.textContent, /R01 固定口径/);
+    assert.ok(drawer.querySelector('[data-xbb-ready]'), '必填项完整提示');
+    assert.ok(drawer.querySelector('[data-xbb-check]'), '最近连通性检查结果');
+    assert.equal(drawer.querySelector('[name="intervalMinutes"]').readOnly, true, '同步周期按 R01 口径不可改');
+
+    // 抽屉内检查连通性：就地刷新结果，不关闭抽屉，概览不出现状态条
+    click(t, '[data-xbb-check-action]');
+    assert.equal(t.F.load().xbb.lastCheck.status, 'ok');
+    assert.match(t.doc.querySelector('[data-xbb-check]').textContent, /连通性正常/);
+    assert.ok(t.doc.querySelector('[data-xbb-config]'), '检查后抽屉保持打开');
+    assert.equal(t.doc.querySelector('[data-xbb-strip]'), null, '检查后概览仍无连接状态条');
+
+    // 保存配置：改值后来源标注转为数据库配置，抽屉关闭
+    fill(t, 'timeoutSeconds', '30');
+    submit(t, '[data-xbb-config]');
+    assert.equal(t.F.load().xbb.timeoutSeconds, 30);
+    assert.equal(t.F.load().xbb.sources.timeoutSeconds, 'database');
+    assert.equal(t.doc.querySelector('[data-xbb-config]'), null, '保存后抽屉关闭');
+
+    // 1.2 原「CRM 归属同步」标题块与「同步策略」卡片已移除；页级动作并入分面页签行，不压在指标卡上方
+    assert.equal(settings.querySelector('.fp-title'), null, '同步概览不再有重复标题块');
+    assert.doesNotMatch(settings.textContent, /CRM 是归属事实唯一来源/);
+    assert.doesNotMatch(settings.textContent, /同步策略/, '同步策略卡片已删除');
+    assert.doesNotMatch(settings.textContent, /事实版本/, '事实版本不再占用概览');
+    const crmNav = settings.querySelector('.fp-crm-nav');
+    const crmResult = settings.querySelector('[data-crm-result]');
+    const crmToolbar = settings.querySelector('[data-crm-toolbar]');
+    assert.ok(crmNav, 'CRM 分面页签与页级动作同一行');
+    assert.ok(crmNav.contains(crmToolbar), '立即对齐 / 查看本轮批次在页签行右侧');
+    assert.ok(crmToolbar.querySelector('[data-action="crm-sync"]'), '操作条保留立即对齐');
+    assert.ok(crmToolbar.querySelector('[data-action="crm-batch"]'), '操作条保留查看本轮批次');
+    assert.ok(crmToolbar.querySelector('[data-action="xbb-open"]'), '操作条保留查看连接配置');
+    assert.equal(crmToolbar.querySelector('[data-action="crm-history"]'), null, '归属历史改由分面页签进入');
+    assert.equal(crmToolbar.querySelector('[data-action="crm-cutover"]'), null, '存量切换不提供运营入口');
+    assert.equal(crmResult.contains(crmToolbar), false, '操作条不在指标卡所在列上方');
+    assert.equal(crmResult.firstElementChild.classList.contains('fp-crm-metrics'), true, '概览首屏从本轮指标开始');
+    const round = settings.querySelector('[data-crm-round]');
+    assert.ok(round, '本轮同步结果面板');
+    assert.equal(round.querySelector('[data-action="crm-pending"]'), null, '本轮同步结果不再放待对应快捷按钮');
+    assert.equal(round.querySelector('[data-action="crm-unassigned"]'), null, '本轮同步结果不再放未分配快捷按钮');
+    assert.equal(round.querySelector('[data-action="crm-errors"]'), null, '本轮同步结果不再放异常快捷按钮');
+    assert.equal(round.querySelector('.fp-actions'), null, '本轮同步结果标题行不再放按钮');
+    assert.equal(round.querySelectorAll('.btn').length, 0, '本轮同步结果表不含按钮');
+    click(t, '[data-action="crm-batch"]');
+    const batchDrawer = t.doc.querySelector('.fp-overlay');
+    assert.match(batchDrawer.textContent, /事实版本 CRM-20260915-1025/, '批次抽屉保留事实版本');
+    assert.match(batchDrawer.textContent, /本轮结论/, '批次抽屉保留本轮结论');
+    assert.match(batchDrawer.textContent, /不提供本地认领或归属申请/, '批次抽屉保留同步策略口径');
+    click(t, '.fp-overlay [data-close]');
+
+    // 同步概览只保留本轮同步结果：人员对应与配置映射整体迁入待对应人员分面
+    assert.equal(settings.querySelector('[data-crm-mappings]'), null, '同步概览不再渲染 CRM 人员与系统账号');
+    assert.equal(settings.querySelector('[data-crm-map-summary]'), null, '同步概览不再重复对应总览');
+    assert.equal(settings.querySelector('[data-action="crm-map-export"]'), null, '同步概览不再放导出对应关系');
+    assert.equal(settings.querySelector('[data-search]'), null, '同步概览不再有对应关系搜索');
+    assert.equal(settingTableCaption(settings), 'CRM 归属同步与确权结果', '同步概览只剩本轮同步结果一张表');
+
+    // 待对应人员分面成为唯一处理入口：看到（对应总览）→ get 到（原因与推荐）→ 操作（行内处理）
+    click(t, '[data-action="crm-view"][data-value="pending"]');
+    const pendingHost = t.doc.querySelector('[data-crm-pending-list]');
+    assert.ok(pendingHost.querySelector('[data-crm-mappings]'), '待对应分面承载人员对应与配置映射');
+    assert.match(pendingHost.querySelector('[data-crm-pending-count]').textContent, /1 条待对应/, '待对应条数跟随对应关系');
+    assert.ok(pendingHost.querySelector('[data-crm-map-summary]'), '对应总览');
+    assert.ok(pendingHost.querySelector('[data-crm-map-hint]'), '未对应影响提示');
+    assert.match(pendingHost.querySelector('.fp-panel-head').textContent, /对应关系只决定确权补建到哪个账号/, '对应关系口径写在待对应分面表头');
+    assert.match(pendingHost.querySelector('[data-crm-map-hint]').textContent, /对应完成前不建立个人确权/, '未对应影响在面板内完整说明');
+
+    // 表格列结构：五列各服务一个判断，待对应行排在已对应行之前
+    const headers = [...pendingHost.querySelectorAll('[data-crm-mappings] thead th')].map(th => th.textContent.trim());
+    assert.deepEqual(headers, ['CRM 人员', '系统账号 / 对应结果', '涉及客户 · 商机', '状态', '操作'], '列结构收敛为五列');
+    assert.deepEqual([...pendingHost.querySelectorAll('[data-crm-mapping-row]')].map(row => row.dataset.status), ['pending', 'matched', 'matched'], '待对应行优先');
+    for (const row of pendingHost.querySelectorAll('[data-crm-mapping-row]')) {
+      assert.equal(row.cells.length, headers.length, '每行列数与表头一致');
+      assert.equal(row.nextElementSibling?.hasAttribute('data-crm-map-detail-row'), true, '每行后跟随详情行');
+      assert.equal(row.nextElementSibling.hasAttribute('hidden'), true, '详情行默认收起');
+    }
+
+    const pendingRow = pendingHost.querySelector('[data-crm-mapping-row][data-status="pending"]');
+    assert.ok(pendingRow, '未对应行');
+    assert.match(pendingRow.cells[1].textContent, /邮箱不一致/, '未对应原因随账号列可见');
+    assert.match(cellText(pendingRow.cells[1]), /推荐账号 赵伟航（U-1009）$/, '推荐账号在账号列完整可读，不做半截截断');
+    assert.match(pendingRow.cells[1].querySelector('.fp-map-candidate').getAttribute('title'), /姓名一致、邮箱不同/, '推荐依据全文放在 title');
+    assert.ok(pendingRow.cells[1].querySelector('[data-crm-map-candidate="U-1009"]'), '推荐账号保留候选钩子');
+    assert.match(pendingRow.cells[2].textContent, /云桥数字科技有限公司/, '待对应涉及客户随表可见');
+    assert.match(pendingRow.cells[2].textContent, /一键登录认证/, '待对应涉及商机随表可见');
+    assert.match(pendingRow.cells[3].textContent, /待对应/, '状态列给出待对应徽章');
+    assert.match(cellText(pendingRow.cells[4]), /采用推荐\s*设置对应\s*详情/, '操作列按主次顺序给出文字动作');
+    assert.ok(pendingRow.querySelector('[data-action="crm-map"]'), '行内设置对应');
+    const detailLink = pendingRow.querySelector('[data-action="crm-map-detail"]');
+    assert.ok(detailLink, '行内详情入口');
+    assert.equal(detailLink.getAttribute('aria-expanded'), 'false', '详情入口默认未展开');
+    assert.equal(detailLink.getAttribute('aria-label'), '详情：赵伟航', '详情入口自带行上下文标签');
+
+    // 操作列去按钮化：文字动作仍是 <a data-action>，动作分发与 aria-label 契约不变
+    for (const link of pendingHost.querySelectorAll('[data-crm-mapping-row] td.is-action a.fp-link-action')) {
+      assert.equal(link.getAttribute('href'), '#', '文字动作是可聚焦的链接');
+      assert.ok(link.dataset.action, '文字动作保留动作钩子');
+      assert.ok(link.getAttribute('aria-label'), '文字动作保留含行上下文的无障碍标签');
+    }
+    assert.equal(pendingHost.querySelectorAll('[data-crm-mapping-row] td.is-action .btn').length, 0, '操作列不再渲染按钮');
+    // 修饰类不能复用表格首列的 is-primary：该类的 min-width:150px 会把文字动作撑成 150px 宽
+    assert.equal(pendingHost.querySelector('td.is-action .is-primary'), null, '文字动作不复用 is-primary 修饰类');
+    assert.equal(pendingHost.querySelector('a[data-action="crm-map-accept"]').classList.contains('is-main'), true, '主操作用 is-main 修饰类');
+    assert.ok(pendingHost.querySelector('td.is-action .fp-map-actions'), '操作列文字动作有独立布局容器');
+
+    const matchedRow = pendingHost.querySelector('[data-crm-mapping-row][data-status="matched"]');
+    assert.match(matchedRow.cells[2].textContent, /个客户 · .*个商机/, '已对应行给出名下客户与商机规模');
+    assert.doesNotMatch(matchedRow.cells[2].textContent, /暂无待补建确权/, '已对应行不再输出「暂无待补建确权」占位说明');
+    assert.equal(cellText(matchedRow.cells[3]), '已对应', '已对应行不再重复输出匹配方式');
+    assert.ok(matchedRow.querySelector('[data-action="crm-map-change"]'), '已对应行可更换对应');
+    assert.ok(matchedRow.querySelector('[data-action="crm-map-detail"]'), '已对应行可展开详情');
+
+    // 详情行内展开：依据、部门邮箱与影响拆解在第二层，不占默认行
+    const detailSelector = '[data-crm-map-detail-row="CRM-U-203"]';
+    assert.equal(t.doc.querySelector(detailSelector).hasAttribute('hidden'), true, '详情默认收起');
+    click(t, '[data-action="crm-map-detail"][data-value="CRM-U-203"]');
+    const detail = t.doc.querySelector(detailSelector);
+    assert.equal(detail.hasAttribute('hidden'), false, '点击详情就地展开');
+    assert.equal(t.doc.querySelector('[data-action="crm-map-detail"][data-value="CRM-U-203"]').getAttribute('aria-expanded'), 'true', '展开态同步 aria-expanded');
+    assert.equal(t.doc.querySelector('[data-action="crm-map-detail"][data-value="CRM-U-203"]').getAttribute('aria-label'), '收起详情：赵伟航', '展开态标签切换为收起');
+    assert.match(detail.textContent, /推荐账号与依据/, '详情承载推荐依据');
+    assert.match(detail.textContent, /zhaoweihang@xbongbong\.com/, '详情承载部门与邮箱');
+    assert.match(detail.textContent, /补建 1 条商机级确权/, '详情承载影响拆解');
+    assert.ok(detail.querySelector('[data-action="crm-impact"]'), '详情内保留查看影响');
+    click(t, '[data-action="crm-map-detail"][data-value="CRM-U-203"]');
+    assert.equal(t.doc.querySelector(detailSelector).hasAttribute('hidden'), true, '再次点击收起详情');
+    assert.equal(t.doc.querySelector('[data-action="crm-map-detail"][data-value="CRM-U-203"]').getAttribute('aria-expanded'), 'false', '收起后 aria-expanded 复位');
+
+    // 只看待对应：筛选即时生效并回填条件，再次点击切回全部
+    click(t, '[data-action="crm-map-only-pending"]');
+    assert.equal(t.doc.querySelectorAll('[data-crm-mapping-row]').length, 1);
+    assert.equal(t.doc.querySelector('[name="mapStatus"]').value, 'pending');
+    assert.match(t.doc.querySelector('[data-action="crm-map-only-pending"]').textContent, /显示全部/, '筛选态可一键切回全部');
+    click(t, '[data-action="crm-map-only-pending"]');
+    assert.equal(t.doc.querySelector('[name="mapStatus"]').value, '');
+    click(t, '[data-search] [type="reset"]');
+    assert.equal(t.doc.querySelectorAll('[data-crm-mapping-row]').length, 3);
+
+    // 切回概览再回到待对应：搜索与筛选状态在分面之间保持
+    click(t, '[data-action="crm-view"][data-value="overview"]');
+    click(t, '[data-action="crm-view"][data-value="pending"]');
+    assert.equal(t.doc.querySelectorAll('[data-crm-mapping-row]').length, 3);
+
+    // 采用推荐：先给影响预览，确认后对应到推荐账号并补建确权
+    click(t, '[data-action="crm-map-accept"]');
+    assert.ok(t.doc.querySelector('[data-crm-suggestion]'), '采用推荐前给出影响预览');
+    click(t, '[data-action="crm-map-accept-confirm"]');
+    assert.equal(t.F.load().crm.pendingMappings.find(item => item.id === 'MAP-203').status, 'resolved');
+    assert.equal(t.F.load().crm.mappings.find(item => item.crmId === 'CRM-U-203').ownerId, 'U-1009');
+    assert.ok(t.F.load().entitlements.some(item => item.opportunityId === 'OP-304' && item.sales === 'U-1009'));
+
+    // 更换对应：只改下一次同步的补建目标，已生成确权不回溯
+    click(t, '[data-action="crm-map-change"]');
+    change(t, 'mappedOwner', 'U-1006');
+    submit(t);
+    assert.equal(t.F.load().crm.mappings.find(item => item.crmId === 'CRM-U-201').ownerId, 'U-1006');
     assert.deepEqual(t.errors, []);
   } finally { t.close(); }
 });
@@ -618,6 +836,12 @@ test('R02 空间详情分别展示生命周期与内容就绪度，失败重试�
   } finally { admin.close(); }
 });
 
+function mdFile(name, body, extra = {}) {
+  const text = body == null ? '' : String(body);
+  const size = extra.size != null ? extra.size : Buffer.byteLength(text, 'utf8');
+  return { name, size, type: extra.type || 'text/markdown', body: extra.body !== undefined ? extra.body : text };
+}
+
 test('R03 内容范围按层展示，外部资料逐份校验与单份重试互不影响', () => {
   const sol = load('followup-workbench', '?role=SOL&as=U-1010&space=WS-201&tab=documents');
   let saved;
@@ -627,25 +851,38 @@ test('R03 内容范围按层展示，外部资料逐份校验与单份重试互�
     assert.equal(layers.length, 6, '内容范围应按六层展示');
     assert.deepEqual(layers.map(node => node.dataset.scopeLayer), ['customer', 'opportunity', 'followup', 'meeting', 'solution', 'document']);
 
-    // 4.2 逐份校验：不合格不提交、重复不重复挂载、同名不同内容作为新增、挂载失败可重试
-    const results = sol.F.uploadDocuments('WS-201', ['plan', 'format', 'empty', 'oversize', 'duplicate', 'samename', 'mountfail']);
-    const byName = key => results.filter(item => item.status === key);
-    assert.equal(byName('rejected').length, 3, '格式、空正文和超限文件均不提交');
-    assert.equal(byName('duplicate').length, 1, '内容完全相同的文件不重复挂载');
-    assert.equal(byName('success').length, 2, '正常文件与同名不同内容文件均挂载成功');
-    assert.equal(byName('failed').length, 1, '挂载失败的文件独立反馈');
+    click(sol, '[data-action=doc-upload]');
+    const picker = sol.doc.querySelector('[data-document-upload] input[name=docs][type=file][multiple]');
+    assert.ok(picker, '资料上传应使用本机文件选择器');
+    assert.equal(sol.doc.querySelector('[data-document-upload] input[type=checkbox]'), null, '不再提供勾选样例清单');
+    assert.match(picker.getAttribute('accept') || '', /\.md/);
+
+    // 4.2 逐份校验：不合格不提交、重复不重复挂载、同名不同内容作为新增
+    const existing = sol.F.load().documents.find(doc => doc.id === 'DOC-401');
+    const results = sol.F.uploadDocuments('WS-201', [
+      mdFile('客户方案要点.md', '本次方案聚焦三个业务场景的接入顺序，建议先完成试点验收口径确认，再进入商务谈判。'),
+      mdFile('客户组织架构.pdf', '组织架构正文', { type: 'application/pdf' }),
+      mdFile('空白记录.md', '   '),
+      mdFile('历史资料全量导出.md', '超限正文', { size: 21 * 1024 * 1024 }),
+      mdFile(existing.name, existing.excerpt),
+      mdFile('星辰科技-试点方案v2.md', '同名但内容不同的修订版，作为新增资料处理，未覆盖旧资料。')
+    ]);
+    const byStatus = key => results.filter(item => item.status === key);
+    assert.equal(byStatus('rejected').length, 3, '格式、空正文和超限文件均不提交');
+    assert.equal(byStatus('duplicate').length, 1, '内容完全相同的文件不重复挂载');
+    assert.equal(byStatus('success').length, 2, '正常文件与同名不同内容文件均挂载成功');
     const samename = results.find(item => item.status === 'success' && item.note);
     assert.match(samename.note, /未覆盖旧资料/, '同名不同内容作为新增资料处理');
     assert.equal(sol.F.load().documents.filter(doc => doc.space === 'WS-201' && doc.name === '星辰科技-试点方案v2.md').length, 2, '旧资料仍保留');
 
     // 单份重试只影响该份资料，同批成功结果不回滚
-    const failed = sol.F.load().documents.find(doc => doc.space === 'WS-201' && doc.status === 'failed');
-    const successBefore = sol.F.load().documents.filter(doc => doc.space === 'WS-201' && doc.status === 'success').length;
+    const failed = sol.F.load().documents.find(doc => doc.id === 'DOC-403');
+    const successBefore = sol.F.load().documents.filter(doc => doc.space === 'WS-202' && doc.status === 'success').length;
     sol.F.retryDocument(failed.id);
     const after = sol.F.load().documents;
     assert.equal(after.find(doc => doc.id === failed.id).status, 'success');
-    assert.equal(after.find(doc => doc.id === failed.id).retryCount, 1);
-    assert.equal(after.filter(doc => doc.space === 'WS-201' && doc.status === 'success').length, successBefore + 1);
+    assert.equal(after.find(doc => doc.id === failed.id).retryCount, 2);
+    assert.equal(after.filter(doc => doc.space === 'WS-202' && doc.status === 'success').length, successBefore + 1);
     saved = sol.save(); assert.deepEqual(sol.errors, []);
   } finally { sol.close(); }
 
@@ -653,14 +890,54 @@ test('R03 内容范围按层展示，外部资料逐份校验与单份重试互�
   const frozen = load('followup-workbench', '?role=SOL&as=U-1011&space=WS-206&tab=documents', saved);
   try {
     assert.equal(frozen.F.canUpload(frozen.F.space('WS-206')), false, '冻结空间不可上传');
-    assert.throws(() => frozen.F.uploadDocuments('WS-206', ['plan']), /冻结/);
+    assert.throws(() => frozen.F.uploadDocuments('WS-206', [mdFile('客户方案要点.md', '正文')]), /冻结/);
     assert.equal(frozen.doc.querySelector('[data-action=doc-upload]'), null, '冻结空间不展示上传入口');
   } finally { frozen.close(); }
   const outside = load('followup-workbench', '?role=SOL&as=U-1011&space=WS-201&tab=documents', saved);
   try {
     assert.equal(outside.F.space('WS-201'), undefined, '承接范围外不返回空间');
-    assert.throws(() => outside.F.uploadDocuments('WS-201', ['plan']), /承接范围|访问权限/);
+    assert.throws(() => outside.F.uploadDocuments('WS-201', [mdFile('客户方案要点.md', '正文')]), /承接范围|访问权限/);
   } finally { outside.close(); }
+});
+
+test('R03 销售运营资料页可上传并刷新全部内容，超管与冻结空间保持只读', () => {
+  const mgr = load('followup-workbench', '?role=MGR&as=U-1002&space=WS-201&tab=documents');
+  let saved;
+  try {
+    assert.equal(mgr.doc.querySelector('[data-action=doc-upload]') !== null, true, '销售运营资料页应出现上传入口');
+    assert.equal(mgr.doc.querySelector('[data-action=content-refresh]') !== null, true, '销售运营资料页应常驻刷新全部内容');
+    assert.equal(mgr.doc.body.textContent.includes('全量只读视图'), false, '销售运营不再整页标为全量只读');
+    assert.match(mgr.doc.body.textContent, /全量查看 · 资料可写/);
+    assert.match(mgr.F.permissionContext().write, /资料页可上传外部 \.md/);
+    click(mgr, '[data-action=doc-upload]');
+    assert.ok(mgr.doc.querySelector('[data-document-upload] input[name=docs][type=file]'), '销售运营资料页应使用本机文件选择器');
+    assert.equal(mgr.doc.querySelector('[data-document-upload] input[type=checkbox]'), null, '销售运营资料页不再勾选样例');
+    const beforeVersion = mgr.F.space('WS-201').lastReadableVersion;
+    const results = mgr.F.uploadDocuments('WS-201', [mdFile('容量与成本测算.md', '按客户提供的业务量测算，建议预留 1.8 倍冗余；成本随峰值阶梯计价。')]);
+    assert.equal(results.some(item => item.status === 'success'), true, '销售运营可挂载外部资料');
+    const space = mgr.F.load().spaces.find(item => item.id === 'WS-201');
+    assert.notEqual(space.lastReadableVersion, beforeVersion, '至少一份挂载成功后应推进可读版本');
+    assert.equal(space.lifecycleEvents[0].type, 'content_refresh', '上传成功后应留下全量更新记录');
+    mgr.F.refreshSpaceContent('WS-201');
+    assert.equal(mgr.F.load().spaces.find(item => item.id === 'WS-201').lifecycleEvents[0].reason.includes('手动刷新'), true);
+    saved = mgr.save(); assert.deepEqual(mgr.errors, []);
+  } finally { mgr.close(); }
+
+  const admin = load('followup-workbench', '?role=ADM&as=U-1001&space=WS-201&tab=documents', saved);
+  try {
+    assert.equal(admin.F.canUpload(admin.F.space('WS-201')), false, '超管不可上传');
+    assert.equal(admin.doc.querySelector('[data-action=doc-upload]'), null, '超管资料页不展示上传入口');
+    assert.equal(admin.doc.querySelector('[data-action=content-refresh]'), null, '超管资料页不展示刷新入口');
+    assert.throws(() => admin.F.uploadDocuments('WS-201', [mdFile('客户方案要点.md', '正文')]), /解决方案人员或销售运营/);
+  } finally { admin.close(); }
+
+  const frozen = load('followup-workbench', '?role=MGR&as=U-1002&space=WS-206&tab=documents', saved);
+  try {
+    assert.equal(frozen.F.canUpload(frozen.F.space('WS-206')), false, '冻结空间销售运营也不可上传');
+    assert.equal(frozen.doc.querySelector('[data-action=doc-upload]'), null);
+    assert.equal(frozen.doc.querySelector('[data-action=content-refresh]'), null);
+    assert.throws(() => frozen.F.refreshSpaceContent('WS-206'), /冻结/);
+  } finally { frozen.close(); }
 });
 
 test('R04 概览为默认入口，本次变化、依据溯源与冻结问答约束成立', () => {
@@ -673,19 +950,61 @@ test('R04 概览为默认入口，本次变化、依据溯源与冻结问答约�
     assert.equal(t.doc.querySelectorAll('[data-overview-panel]').length, 10, '概览应有十个板块');
     assert.ok(t.doc.querySelector('[data-overview-panel="who"] .fp-source-chip'), '结论应带依据入口');
 
-    // 4.2 提交跟进后异步更新，输出新增与前后对比，并给直达入口
+    // 4.2 0921 版面：指标条在概览最上方；更新信号只有铃铛红点一个出口，打开更新抽屉即已读
+    const metrics = t.doc.querySelector('[data-overview-metrics]');
+    assert.ok(metrics, '概览顶部应有指标条');
+    assert.equal(metrics.querySelectorAll('[data-metric]').length, 5, '指标条为五个可比数值');
+    assert.ok(metrics.compareDocumentPosition(t.doc.querySelector('[data-overview-panel="verdict"]')) & 4, '指标条位于一句话判断之前');
+    assert.equal(t.doc.querySelector('[data-update-hint]'), null, '概览常显区不再放更新提示条');
+    click(t, '[data-tab="customer"]');
+    assert.ok(t.doc.querySelector('[data-open-assistant]'), '空间助手悬浮入口跨 Tab 常驻');
+    click(t, '[data-tab="overview"]');
+
+    // 提交跟进后异步更新：红点点亮，更新抽屉内展示本次变化与同源全量历史
     click(t, '[data-action=followup]');
     fill(t, 'text', '客户确认试点在下周启动'); fill(t, 'next', '周三对齐验收指标'); submit(t);
-    const latest = t.doc.querySelector('[data-change-latest]');
+    assert.ok(t.doc.querySelector('[data-open-updates]').classList.contains('has-unread'), '有新变化时更新入口点亮红点');
+    click(t, '[data-open-updates]');
+    const updatesPanel = t.doc.querySelector('[data-updates-panel]');
+    assert.ok(updatesPanel, '更新入口唤出更新抽屉');
+    const latest = updatesPanel.querySelector('[data-change-latest]');
     assert.equal(latest.querySelector('[data-space-change]').dataset.spaceChange, 'done');
     assert.ok(latest.querySelector('[data-change-added]'), '应展示新增');
     assert.ok(latest.querySelector('[data-change-updated]'), '应展示更新前后对比');
-    assert.equal(t.doc.querySelector('[data-update-hint]').dataset.updateHint, 'done');
-    assert.ok(t.doc.querySelector('[data-action=goto-overview]'), '有变化时提供直达入口');
+    assert.ok(updatesPanel.querySelector('[data-update-history] [data-history-node]'), '更新历史与跟进 Tab 同源、全量保留');
+    assert.equal(t.doc.querySelector('[data-open-updates]').classList.contains('has-unread'), false, '打开更新抽屉即视为已读');
+    t.doc.querySelector('.fp-overlay [data-close]').click();
 
-    // 快捷问答只读取本空间上下文；无依据时不编造
-    click(t, '[data-action=ask][data-value="当前卡点是什么？"]');
-    assert.equal(t.doc.querySelector('[data-qa-item]').dataset.qaItem, 'answered');
+    // 空间助手由悬浮入口唤出，抽屉内是与移动端同一套条目式对话
+    t.w.FN_FAST = true;
+    click(t, '[data-open-assistant]');
+    const chat = t.doc.querySelector('.fp-overlay [data-space-qa]');
+    assert.ok(chat, '抽屉内是对话区而不是内容列表');
+    assert.ok(chat.querySelector('[data-qa-welcome]'), '空会话给出引导区');
+    assert.ok(chat.querySelectorAll('[data-qa-presets] [data-action=ask]').length >= 3, '引导区给预设问题');
+    assert.ok(t.doc.querySelector('.fp-overlay [data-qa-field]'), '抽屉内可直接提问');
+    assert.equal(t.doc.querySelector('.fp-overlay [data-qa-send]').dataset.state, 'send', '未作答时是发送态');
+    click(t, '.fp-overlay [data-action=ask][data-value="当前卡点是什么？"]');
+    const firstAnswer = t.doc.querySelector('.fp-overlay [data-qa-item]');
+    assert.equal(firstAnswer.dataset.qaItem, 'answered');
+    assert.equal(t.doc.querySelector('.fp-overlay [data-qa-welcome]'), null, '开口后引导区让位');
+    assert.ok(t.doc.querySelector('.fp-overlay [data-qa-user] .fp-chat-bubble'), '提问以用户批注留在对话里');
+    assert.equal(firstAnswer.querySelector('[data-source]'), null, '答案不再挂溯源胶囊');
+    assert.ok(firstAnswer.querySelector('[data-qa-cite]'), '答案依据以脚注形式呈现');
+    assert.ok(firstAnswer.querySelector('[data-action="qa-copy"]'), '答案可复制');
+    assert.ok(firstAnswer.querySelector('[data-action="qa-regen"]'), '最后一条答案可重新生成');
+    // 自由提问走同一条作答链路，答案按时间正序追加
+    const field = t.doc.querySelector('.fp-overlay [data-qa-field]');
+    field.value = '关键人是谁？';
+    t.doc.querySelector('.fp-overlay [data-qa-send]').click();
+    assert.ok(t.doc.querySelectorAll('.fp-overlay [data-qa-item]').length >= 2, '自由提问走同一条作答链路');
+    const answers = [...t.doc.querySelectorAll('.fp-overlay [data-qa-item]')];
+    assert.equal(answers[0].querySelector('[data-action="qa-regen"]'), null, '重新生成只留给最后一条');
+    // 依据脚注点回原文，叠一层抽屉而不替换对话
+    click(t, '.fp-overlay [data-qa-cite]');
+    assert.ok(t.doc.querySelectorAll('.fp-overlay').length >= 2, '脚注可点回原文');
+    t.doc.querySelectorAll('.fp-overlay [data-close]')[1].click();
+    t.doc.querySelector('.fp-overlay [data-close]').click();
     const blind = t.F.askSpace('WS-201', '客户的年度采购预算总额是多少？');
     assert.equal(blind.hasEvidence, false);
     assert.match(blind.answer, /没有可用依据/);
@@ -709,7 +1028,8 @@ test('R04 概览为默认入口，本次变化、依据溯源与冻结问答约�
   try { assert.ok(ownerOnly.doc.querySelector('[data-overview-panel="last"] [data-panel-empty]'), '无依据板块不输出结论'); } finally { ownerOnly.close(); }
   const frozen = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-206&tab=overview', saved);
   try {
-    assert.ok(frozen.doc.querySelector('[data-qa-frozen]'), '冻结空间说明不开放新问答');
+    click(frozen, '[data-open-assistant]');
+    assert.ok(frozen.doc.querySelector('.fp-overlay [data-qa-frozen]'), '冻结空间说明不开放新问答');
     assert.equal(frozen.doc.querySelector('[data-action=ask]'), null, '冻结空间隐藏提问入口');
     assert.throws(() => frozen.F.askSpace('WS-206', '当前卡点是什么？'), /冻结/);
     assert.ok(frozen.doc.querySelector('[data-overview-panel]'), '冻结空间历史内容仍可回看');
@@ -814,20 +1134,46 @@ test('R06 客户归属视图分栏展示当前与历史，异常单独标注且�
   } finally { sales.close(); }
 });
 
-test('R07 方案人员工作台按客户去重，展开销售空间并从全景抽屉补充资料', () => {
+test('R07 方案人员工作台按客户去重，展开销售空间并从全景抽屉补充资料', async () => {
   const t = load('solution-workbench', '?role=SOL&as=U-1010');
+  const delay = () => new Promise(resolve => t.w.setTimeout(resolve, 340));
   try {
-    assert.ok(t.doc.querySelector('.fp-workbench-hero'));
-    assert.ok(t.doc.querySelector('.fp-metrics'));
+    assert.equal(t.doc.querySelector('.fp-workbench-hero'), null, '工作台不再用英雄说明区');
+    assert.equal(t.doc.querySelector('.fp-workbench-grid aside'), null, '行业占比不再独占右栏');
+    assert.ok(t.doc.querySelector('.fp-subnav a[href*="solution-push"]'), '方案推送从次级导航进入');
+    assert.ok(t.doc.querySelector('.fp-subnav a[href*="solution-feedback"]'), '反馈看板从次级导航进入');
+    assert.ok(t.doc.querySelector('.fp-dispatch'), '指标带作为今日更新锚点');
+    assert.equal(t.doc.querySelector('[data-today-updated]').textContent, '2', '今日有更新只计当天有效变化客户');
+    assert.match(t.doc.querySelector('.fp-dispatch-mix').textContent, /行业客户占比/);
+    assert.equal(t.doc.body.textContent.includes('暂无本期更新'), false, '静默行不写负向提醒');
+    assert.equal(t.doc.querySelector('[data-search-feedback]').hidden, true, '默认排序不进入筛选反馈');
     const customers = [...t.doc.querySelectorAll('[data-customer-row]')];
     assert.ok(customers.length > 0, '应展示承接客户');
     assert.equal(new Set(customers.map(row => row.dataset.customerRow)).size, customers.length, '同一客户只出现一次');
+    assert.equal(customers.filter(row => row.classList.contains('has-update')).length, 2, '列表只给今日有更新的客户打标');
+
+    click(t, '[name="period"][value="week"]');
+    assert.equal(t.doc.querySelector('[data-today-updated]').textContent, '2', '周期切换不改写今日有更新');
+    assert.match(t.doc.querySelector('.fp-dispatch-metrics').textContent, /本周/);
+
+    const search = t.doc.querySelector('[data-search] [name="q"]');
+    search.value = '海川';
+    search.dispatchEvent(new t.w.InputEvent('input', { bubbles: true }));
+    await delay();
+    assert.equal(t.doc.querySelector('[data-search-count]').dataset.rowCount, '1', '搜索按客户计数');
+    assert.equal(t.doc.querySelector('[data-search-summary]').textContent, '显示 1 / 4 个客户');
+    click(t, '[data-remove-filter="q"]');
+    assert.equal(t.doc.querySelector('[data-search-feedback]').hidden, true);
 
     click(t, '[data-action="customer-expand"]');
     assert.ok(t.doc.querySelector('.fp-customer-spaces'), '展开客户后展示销售空间');
+    assert.equal(t.doc.querySelector('.fp-space-row .fp-avatar'), null, '空间行不再用首字头像');
     click(t, '[data-action="space-preview"]');
     assert.ok(t.doc.querySelector('[data-workbench-space]'), '打开空间全景抽屉');
     assert.ok(t.doc.querySelector('[data-action="workbench-upload"]'), '正常空间展示资料补充入口');
+    click(t, '[data-action="workbench-upload"]');
+    assert.ok(t.doc.querySelector('[data-document-upload] input[name=docs][type=file]'), '工作台补充资料应使用本机文件选择器');
+    assert.equal(t.doc.querySelector('[data-document-upload] input[type=checkbox]'), null, '工作台不再勾选样例资料');
     assert.deepEqual(t.errors, []);
   } finally { t.close(); }
 });
@@ -836,6 +1182,31 @@ test('R08 方案推送支持资产、逐空间结果，反馈看板保留撤回�
   const push = load('solution-push', '?role=SOL&as=U-1010');
   let saved;
   try {
+    assert.match(push.doc.body.textContent, /通信线路试点建议\.docx/);
+    assert.match(push.doc.body.textContent, /通信线路试点建议\.pdf/);
+    assert.match(push.doc.body.textContent, /试点汇报材料\.pptx/);
+    assert.match(push.doc.body.textContent, /试点要点说明\.md/);
+    assert.match(push.doc.body.textContent, /并发容量测算\.xlsx/);
+
+    click(push, '[data-action="compose"]');
+    const picker = push.doc.querySelector('[data-solution-form] [name=attachments]');
+    assert.ok(picker && picker.multiple, '推送表单应允许多选附件');
+    assert.match(picker.getAttribute('accept') || '', /\.docx/);
+    assert.match(picker.getAttribute('accept') || '', /\.pdf/);
+    assert.match(picker.getAttribute('accept') || '', /\.pptx?/);
+    assert.match(picker.getAttribute('accept') || '', /\.md/);
+    assert.match(picker.getAttribute('accept') || '', /\.xlsx?/);
+    push.doc.querySelector('[data-solution-form] [name=spaces][value="WS-201"]').checked = true;
+    fill(push, 'title', '多格式试点材料包');
+    fill(push, 'body', '请分别核对不同格式附件。');
+    click(push, '[data-fill-demo-attachments]');
+    const demoRows = [...push.doc.querySelectorAll('[data-solution-form] [data-attachment-row]')];
+    assert.deepEqual(Array.from(demoRows, row => row.dataset.attachmentRow), ['docx', 'pdf', 'pptx', 'md', 'xlsx']);
+    submit(push, '[data-solution-form]');
+    const packed = push.F.load().solutions.find(item => item.title === '多格式试点材料包' && item.space === 'WS-201');
+    assert.equal(packed.attachments.length, 5);
+    assert.deepEqual(Array.from(packed.attachments, file => file.name.replace(/^.*\./, '')), ['docx', 'pdf', 'pptx', 'md', 'xlsx']);
+
     const results = push.F.sendSolution(['WS-201', 'WS-206'], {
       title: '逐空间交付建议', body: '请分别确认试点范围。',
       attachments: [{ name: '交付清单.pdf', size: '80 KB' }], externalLink: 'https://example.com/delivery'
@@ -859,8 +1230,42 @@ test('R08 方案推送支持资产、逐空间结果，反馈看板保留撤回�
     assert.match(feedback.doc.querySelector('[data-feedback-results]').textContent, /已撤回/);
     assert.match(feedback.doc.querySelector('[data-feedback-results]').textContent, /未读/);
     assert.match(feedback.doc.querySelector('[data-feedback-results]').textContent, /催办/);
+
+    // 列结构：六列各服务一个判断；复合列名用显式 className 声明列宽类，不靠列名猜
+    const board = feedback.doc.querySelector('[data-feedback-results] .fp-data-table');
+    assert.deepEqual([...board.querySelectorAll('thead th')].map(th => th.textContent.trim()),
+      ['方案 / 客户空间', '接收销售', '推送 / 阅读', '反馈状态', '催办', '操作'], '反馈看板列结构');
+    assert.ok(board.classList.contains('fp-feedback-table'), '反馈看板使用自己的列宽模型');
+    assert.ok(board.querySelector('thead th.is-date'), '推送 / 阅读显式声明为时间列');
+    assert.ok(board.querySelector('thead th.is-long'), '反馈状态显式声明为可换行的长文列');
+    assert.equal(board.querySelector('thead th.is-status').textContent.trim(), '催办', '催办列按短状态列收窄');
+
+    // 操作列去按钮化：只放文字动作，动作有独立布局容器，aria-label 仍带行上下文
+    const actionLinks = [...board.querySelectorAll('tbody td.is-action a.fp-link-action')];
+    assert.ok(actionLinks.length >= 4, '操作列承载文字动作');
+    assert.equal(board.querySelectorAll('tbody td.is-action .btn').length, 0, '操作列不再渲染按钮');
+    assert.ok(board.querySelector('tbody td.is-action .fp-row-actions'), '操作列文字动作有独立布局容器');
+    for (const link of actionLinks) {
+      assert.ok(link.getAttribute('aria-label'), '文字动作保留含行上下文的无障碍标签');
+      if (link.dataset.action) assert.equal(link.getAttribute('href'), '#', '文字动作是可聚焦的链接');
+    }
+    const rowOf = title => [...board.querySelectorAll('tbody tr')].find(row => row.cells[0].textContent.includes(title));
+    const repliedRow = rowOf('华东配送通知优化方案');
+    assert.match(cellText(repliedRow.cells[4]), /已回复，无需催办/, '不可催办原因落在催办列');
+    assert.match(cellText(repliedRow.cells[5]), /查看详情\s*回到空间/, '操作列按主次顺序给出文字动作');
+    assert.doesNotMatch(cellText(repliedRow.cells[5]), /无需催办|撤回记录|空间冻结/, '操作列不再混入状态说明');
+    assert.equal(repliedRow.querySelector('[data-action="detail"]').classList.contains('is-main'), true, '主操作用 is-main 修饰类');
+    assert.equal(repliedRow.querySelector('[data-action="remind"]'), null, '已回复行不出现催办入口');
+    const unreadRow = rowOf('通信线路试点建议');
+    assert.ok(unreadRow.querySelector('[data-action="remind"]'), '未读行给出催办入口');
+    assert.match(unreadRow.querySelector('td.is-action a[href*="followup-workbench"]').getAttribute('href'), /tab=solutions/, '回到空间直达该空间的方案往来');
+
     click(feedback, '[data-tab="withdrawn"]');
     assert.equal(feedback.doc.querySelector('.fp-table-shell').dataset.rowCount, '1');
+    const withdrawnRow = feedback.doc.querySelector('[data-feedback-results] tbody tr');
+    assert.match(cellText(withdrawnRow.cells[4]), /已撤回，不进入待催办/, '撤回原因落在催办列');
+    assert.equal(withdrawnRow.querySelectorAll('td.is-action a').length, 1, '撤回行只保留查看详情');
+    assert.equal(withdrawnRow.querySelector('[data-action="remind"]'), null, '撤回行不给催办入口');
     assert.deepEqual(feedback.errors, []);
   } finally { feedback.close(); }
 });
@@ -1127,9 +1532,11 @@ test('R13 今日该跟：快照消费、标记次日生效、跑批提醒与提�
     const meetingLink = evidenceDrawer.querySelector('a[href*="meeting-center"][href*="meeting=MT-102"]');
     assert.ok(meetingLink, '录音依据给进入该条录音入口');
     sales.doc.querySelector('.fp-overlay [data-close]').click();
-    // 转写未就绪的录音依据有标明
+    // 录音依据给「智能总结 / 录音原文」两栏，且不出现转写阶段措辞
     click(sales, '[data-insight-row="WS-203"] [data-action="evidence"]');
-    assert.match(sales.doc.querySelector('[data-evidence-drawer]').textContent, /转写未就绪/);
+    const recEvidence = sales.doc.querySelector('[data-evidence-drawer]');
+    assert.ok(recEvidence.querySelector('[data-evidence-recording] [data-rec-pane-tab="transcript"]'), '录音依据给录音原文栏');
+    assert.equal(recEvidence.textContent.includes('转写未就绪'), false, '不再标注转写状态');
     sales.doc.querySelector('.fp-overlay [data-close]').click();
     // 截断说明 footer
     assert.match(sales.doc.querySelector('[data-today-list]').textContent, /未入选/);
@@ -1208,11 +1615,11 @@ test('R13 今日该跟：快照消费、标记次日生效、跑批提醒与提�
     assert.deepEqual(ui.errors, []);
   } finally { ui.close(); }
 
-  // 客户空间 hero 标记入口：本人正常有商机空间提供，冻结与仅客户级不提供；两边展示同一状态
+  // 客户空间 chrome 标记入口：本人正常有商机空间提供，冻结与仅客户级不提供；两边展示同一状态
   const ws201 = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-201', uiSaved);
   try {
-    assert.ok(ws201.doc.querySelector('[data-action="space-mark"]'), '客户空间 hero 提供标记入口');
-    assert.match(ws201.doc.querySelector('.fp-hero-chips').textContent, /已星标/, '空间内展示与今日页一致的标记状态');
+    assert.ok(ws201.doc.querySelector('[data-action="space-mark"]'), '客户空间 chrome 提供标记入口');
+    assert.match(ws201.doc.querySelector('[data-space-chips]').textContent, /已星标/, '空间内展示与今日页一致的标记状态');
   } finally { ws201.close(); }
   const ws206 = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-206');
   try { assert.equal(ws206.doc.querySelector('[data-action="space-mark"]'), null, '冻结空间无标记入口'); } finally { ws206.close(); }
@@ -1300,34 +1707,77 @@ test('R13 今日该跟：快照消费、标记次日生效、跑批提醒与提�
     assert.throws(() => salesArrange.F.runInsightBatch('U-1004'), /销售运营|超级管理员/, '销售无权跑批');
   } finally { salesArrange.close(); }
 
-  // 运营页表格契约与分面交互：修订记录、试跑对照、发布记录、产出时点、产出记录
+  // 运营页工作台契约：批次健康首屏、工位编排、沙箱试跑对照、次日切版确认与记录配置
   const opsPage = load('insight-ops', '?role=MGR&as=U-1002');
   try {
-    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-prompt-revisions]'), '提示词修订记录', 'R13/修订记录') > 0);
-    assert.match(opsPage.doc.querySelector('[data-prompt="ranking"]').textContent, /有未上线草稿/, '保存不等于上线');
-    click(opsPage, '[data-tab="trial"]');
-    assertFeatureTable(opsPage.doc.querySelector('[data-trial-result]'), '试跑对照结果', 'R13/试跑对照');
-    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-trial-history]'), '试跑历史记录', 'R13/试跑历史') > 0);
-    // 页面级试跑：切到排序、勾选空间、提交后出对照
-    change(opsPage, 'kind', 'ranking');
-    const trialForm = opsPage.doc.querySelector('[data-trial-form]');
-    assert.ok(trialForm.querySelector('[name="upstream"]'), '试排序需选上游来源');
-    trialForm.querySelector('[name="spaces"][value="WS-201"]').checked = true;
-    trialForm.querySelector('[name="spaces"][value="WS-206"]').checked = true;
-    submit(opsPage, '[data-trial-form]');
-    assert.equal(opsPage.doc.querySelectorAll('[data-trial-row]').length, 2, '试跑出对照结果');
-    assert.match(opsPage.doc.querySelector('[data-trial-row="WS-206"]').textContent, /已冻结/, '冻结样本在对照中标明');
-    click(opsPage, '[data-tab="publish"]');
-    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-publish-log]'), '提示词发布记录', 'R13/发布记录') > 0);
-    click(opsPage, '[data-tab="schedule"]');
-    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-schedule-table]'), '产出时点覆盖', 'R13/产出时点') > 0);
-    assert.match(opsPage.doc.querySelector('[data-schedule-row="U-1008"]').textContent, /10:30/, '按销售覆盖时点展示');
-    click(opsPage, '[data-tab="batches"]');
+    // 批次健康：首屏四态总览、失败行置顶、快照抽屉用销售语言回看名单
+    assert.ok(opsPage.doc.querySelector('[data-batch-health]'), '首屏为今日批次健康');
+    assert.match(opsPage.doc.querySelector('[data-health-card="failed"]').textContent, /1/, '失败计数可见');
+    assert.match(opsPage.doc.querySelector('[data-tomorrow-chips]').textContent, /待上线/, '明日切版预告含待上线草稿');
     assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-batch-table]'), '今日该跟产出记录', 'R13/产出记录') > 0);
-    assert.match(opsPage.doc.querySelector('[data-batch-row="U-1006"]').textContent, /状态判断服务超时/, '运营可查看失败原因');
+    const batchRows = [...opsPage.doc.querySelectorAll('[data-batch-row]')];
+    assert.equal(batchRows[0].dataset.batchRow, 'U-1006', '失败销售行置顶');
+    assert.match(batchRows[0].textContent, /状态判断服务超时/, '失败原因首行可见');
+    assert.ok(opsPage.doc.querySelector('[data-demo-tools] summary'), '演示跑批收进原型调试折叠区');
+    assert.ok(opsPage.doc.querySelector('[data-demo-tools] [data-action="batch-run"]'), '折叠区内保留演示跑批');
     click(opsPage, '[data-batch-row="U-1004"] [data-action="batch-view"]');
     assert.ok(opsPage.doc.querySelector('[data-snapshot-drawer]'), '查看快照抽屉');
     assert.match(opsPage.doc.querySelector('[data-snapshot-drawer]').textContent, /状态 v3 · 排序 v2 · 动作 v5/, '快照记录三份提示词各自版本');
+    assert.equal(opsPage.doc.querySelectorAll('[data-snapshot-entry]').length, 4, '快照用销售语言卡片回看名单');
+    opsPage.doc.querySelector('.fp-overlay [data-close]').click();
+    // 工位编排：三工位步进条；排序工位草稿验证状态来自同稿最近一次试跑
+    assert.equal(opsPage.doc.querySelectorAll('[data-action="station-select"]').length, 3, '三个工位');
+    click(opsPage, '[data-action="station-select"][data-value="ranking"]');
+    assert.match(opsPage.doc.querySelector('[data-prompt="ranking"]').textContent, /保存不等于上线/, '保存不等于上线');
+    assert.match(opsPage.doc.querySelector('[data-prompt="ranking"] .fp-io-block--draft').textContent, /待确认 · 1 处有差异/, '草稿验证状态来自最近一次同稿试跑');
+    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-prompt-revisions]'), '提示词修订记录', 'R13/修订记录') > 0, '工位版本时间线');
+    // 沙箱试跑：持续沙箱标识、快捷带入今日名单、上游默认线上最近一次、冻结样本标明
+    assert.ok(opsPage.doc.querySelector('[data-sandbox-badge]'), '沙箱区持续标识不写线上');
+    click(opsPage, '[data-sample-pick="today"]');
+    assert.equal(opsPage.doc.querySelectorAll('[name="spaces"]:checked').length, 4, '一键带入今日名单空间');
+    assert.match(opsPage.doc.querySelector('[data-sample-count]').textContent, /已选 4 个空间/, '样本计数同步');
+    const trialForm = opsPage.doc.querySelector('[data-trial-form]');
+    assert.ok(trialForm.querySelector('[name="upstream"]'), '试排序需选上游来源');
+    assert.equal(trialForm.querySelector('[name="upstream"]:checked').value, 'online', '线上有结果时默认线上最近一次');
+    trialForm.querySelector('[name="spaces"][value="WS-206"]').checked = true;
+    submit(opsPage, '[data-trial-form]');
+    assert.equal(opsPage.doc.querySelectorAll('[data-trial-row]').length, 5, '试跑出对照结果');
+    assert.match(opsPage.doc.querySelector('[data-trial-row="WS-206"]').textContent, /已冻结/, '冻结样本在对照中标明');
+    assert.ok(opsPage.doc.querySelectorAll('[data-trial-row].fp-io-diff').length > 0, '差异行高亮标注');
+    assert.equal(opsPage.doc.querySelector('[data-results-pane]').hidden, false, '试跑后直接显示对照结果');
+    assert.equal(opsPage.doc.querySelectorAll('[name="spaces"]:checked').length, 5, '试跑后保留所选样本');
+    assertFeatureTable(opsPage.doc.querySelector('[data-trial-result]'), '试跑对照结果', 'R13/试跑对照');
+    // 上线确认：未确认不上线；确认后次日上岗、草稿清空、首屏出现已预约
+    const draftVersion = opsPage.F.load().insight.prompts.ranking.draft.version;
+    click(opsPage, '[data-action="prompt-publish"]');
+    assert.ok(opsPage.doc.querySelector('[data-publish-confirm]'), '上线需二次确认');
+    assert.match(opsPage.doc.querySelector('[data-publish-confirm]').textContent, /明日 .* 新版上岗/, '确认层预告明日上岗');
+    assert.equal(opsPage.F.load().insight.prompts.ranking.draft.version, draftVersion, '未确认前草稿不上线');
+    opsPage.doc.querySelector('.fp-overlay [data-confirm]').click();
+    assert.equal(opsPage.F.load().insight.prompts.ranking.active.version, draftVersion, '确认后草稿成为生效版');
+    assert.equal(opsPage.F.load().insight.prompts.ranking.draft, null, '上线后草稿清空');
+    assert.match(opsPage.doc.querySelector('[data-tomorrow-chips]').textContent, /已预约 2026-09-16 上岗/, '首屏预告已预约明日上岗');
+    // 回退确认：预览回到版本，确认后恢复上一生效版
+    click(opsPage, '[data-action="prompt-rollback"]');
+    assert.ok(opsPage.doc.querySelector('[data-rollback-confirm]'), '回退需确认并预览目标版本');
+    assert.match(opsPage.doc.querySelector('[data-rollback-confirm]').textContent, /回到版本/, '回退预览目标版本');
+    opsPage.doc.querySelector('.fp-overlay [data-confirm]').click();
+    assert.equal(opsPage.F.load().insight.prompts.ranking.active.version, 'v2', '回退恢复上一生效版');
+    assert.equal(opsPage.doc.querySelector('[name="body"]').value, opsPage.F.load().insight.prompts.ranking.active.body, '未编辑的正文随回退刷新，不产生虚假未保存状态');
+    // 未试跑的草稿上线先拦一层
+    click(opsPage, '[data-action="station-select"][data-value="status"]');
+    fill(opsPage, 'body', '新状态口径：补充待决策的判定示例。');
+    submit(opsPage, '[data-draft-form]');
+    click(opsPage, '[data-action="prompt-publish"]');
+    assert.ok(opsPage.doc.querySelector('[data-publish-untested]'), '未试跑草稿上线先拦一层');
+    opsPage.doc.querySelector('.fp-overlay [data-close]').click();
+    // 记录与配置：发布记录、试跑历史、产出时点收在底部，留痕可读
+    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-publish-log]'), '提示词发布记录', 'R13/发布记录') > 0);
+    click(opsPage, '[data-tab="trials"]');
+    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-trial-history]'), '试跑历史记录', 'R13/试跑历史') > 0);
+    click(opsPage, '[data-tab="schedule"]');
+    assert.ok(assertFeatureTable(opsPage.doc.querySelector('[data-schedule-table]'), '产出时点覆盖', 'R13/产出时点') > 0);
+    assert.match(opsPage.doc.querySelector('[data-schedule-row="U-1008"]').textContent, /10:30/, '按销售覆盖时点展示');
     assert.deepEqual(opsPage.errors, []);
   } finally { opsPage.close(); }
 
@@ -1377,6 +1827,55 @@ test('R13 今日该跟：快照消费、标记次日生效、跑批提醒与提�
     assert.equal(keys.indexOf('sales-goals'), keys.indexOf('employee-insights') + 1, '运营菜单顺序（销售目标与进度紧随经营洞察）');
     assert.equal(keys.indexOf('insight-ops'), keys.indexOf('sales-goals') + 1, '运营菜单顺序（经营洞察编排除目标页之后）');
   } finally { mgrMenu.close(); }
+});
+
+test('R13 工作台保留编辑与样本上下文，筛选和历史回看不写业务数据', async () => {
+  const t = load('insight-ops', '?role=MGR&as=U-1002');
+  try {
+    const before = t.save();
+    const typeBody = text => {
+      const field = t.doc.querySelector('[data-draft-form] [name=body]');
+      field.value = text; field.dispatchEvent(new t.w.Event('input', { bubbles: true }));
+    };
+    typeBody('保留中的状态草稿，尚未保存。');
+    click(t, '[data-sample-pick="today"]');
+    click(t, '[data-action="health-filter"][data-value="failed"]');
+    assert.equal(t.doc.querySelectorAll('[data-batch-row]').length, 1, '状态带联动只显示失败销售');
+    assert.equal(t.doc.querySelector('#io-batch-detail').hidden, false);
+    assert.equal(t.doc.querySelector('[name=body]').value, '保留中的状态草稿，尚未保存。');
+    assert.equal(t.doc.querySelectorAll('[name=spaces]:checked').length, 4);
+    assert.equal(new URL(t.w.location.href).searchParams.get('health'), 'failed');
+    click(t, '[data-action="station-select"][data-value="ranking"]');
+    click(t, '[data-sample-pick="judgeable"]');
+    const rankingCount = t.doc.querySelectorAll('[name=spaces]:checked').length;
+    typeBody('排序工位的独立编辑缓冲。');
+    assert.equal(t.doc.querySelector('[data-run-trial]').disabled, true, '未保存内容不能冒充当前版本试跑');
+    assert.equal(t.doc.querySelector('[data-publish-button]').disabled, true, '未保存内容不能误发布');
+    click(t, '[data-action="station-select"][data-value="status"]');
+    assert.equal(t.doc.querySelector('[name=body]').value, '保留中的状态草稿，尚未保存。');
+    assert.equal(t.doc.querySelectorAll('[name=spaces]:checked').length, 4, '样本按工位保留');
+    // 真实浏览器历史事件触发还原，不依赖直接调用渲染函数。
+    const back = new Promise(resolve => t.w.addEventListener('popstate', resolve, { once: true }));
+    t.w.history.back(); await back;
+    assert.equal(t.doc.querySelector('[data-prompt]').dataset.prompt, 'ranking');
+    assert.equal(t.doc.querySelector('[name=body]').value, '排序工位的独立编辑缓冲。');
+    assert.equal(t.doc.querySelectorAll('[name=spaces]:checked').length, rankingCount);
+    click(t, '[data-action="ledger-open"][data-value="schedule"]');
+    assert.equal(t.doc.querySelector('#io-ledger-content').hidden, false);
+    assert.equal(t.doc.activeElement, t.doc.querySelector('[data-ops-ledger]'), '配置入口定位并聚焦变化区域');
+    click(t, '[data-tab="trials"]');
+    const trial = t.F.load().insight.trials[0];
+    click(t, `[data-action="trial-view"][data-value="${trial.id}"]`);
+    assert.equal(t.doc.querySelector('[data-results-pane]').hidden, false);
+    assert.equal(t.doc.querySelectorAll('[data-trial-row]').length, trial.spaces.length);
+    const toggle = t.doc.querySelector('[data-diff-only]'); toggle.checked = true; toggle.dispatchEvent(new t.w.Event('change'));
+    assert.equal(t.doc.querySelectorAll('[data-trial-row]').length, trial.spaces.filter(row => row.changed).length, '差异过滤与历史结果一致');
+    click(t, '[data-action="version-view"]');
+    assert.ok(t.doc.querySelector('[data-version-detail]'));
+    click(t, '.fp-overlay [data-close]');
+    assert.equal(t.save(), before, '筛选、历史浏览和编辑缓冲均未提交业务数据');
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
 });
 
 test('R14 晚间日报：状态分支、权限快照、提醒接口与运营发布', () => {
@@ -2245,10 +2744,15 @@ test('R10 录音归位：三方同步唯一来源、商机锚定校验、多空�
     assert.match(sales.doc.querySelector('[data-recording-source]').textContent, /不提供手动上传/);
     const pageText = sales.doc.querySelector('#fp-content').textContent;
     for (const banned of ['上传录音', '上传客户录音', '实体对齐']) assert.equal(pageText.includes(banned), false, `不应保留旧口径：${banned}`);
-    // 同步失败 / 等待转写 / 未归位三种状态各自可见，不静默丢失
+    // 同步失败 / 已归位 / 未归位三种状态各自可见，不静默丢失
     assert.equal(sales.doc.querySelector('[data-recording-row="MT-106"]').dataset.syncStatus, 'failed');
     assert.equal(sales.doc.querySelector('[data-recording-row="MT-101"]').dataset.recordingState, 'unplaced');
-    assert.match(sales.doc.querySelector('[data-recording-row="MT-103"]').textContent, /等待转写/);
+    assert.equal(sales.doc.querySelector('[data-recording-row="MT-103"]').dataset.recordingState, 'placed');
+    // 转写由三方完成：页面不出现任何转写状态或转写阶段措辞（M05-2 §边界、0921 口径）
+    for (const banned of ['等待转写', '转写中', '转写失败', '转写可用', '最近检查']) {
+      assert.equal(pageText.includes(banned), false, `不应出现转写状态：${banned}`);
+    }
+    assert.match(sales.doc.querySelector('[data-recording-source]').textContent, /三方已完成转写/);
     assert.deepEqual(sales.errors, []);
   } finally { sales.close(); }
 
@@ -2293,20 +2797,23 @@ test('R10 录音归位：三方同步唯一来源、商机锚定校验、多空�
     assert.deepEqual(spaceView.errors, []);
   } finally { spaceView.close(); }
 
-  // 4.3 等待转写 → 转写可用后自动进入更新；冻结空间停止更新
-  const transcribe = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-103');
+  // 4.3 归位后进入客户信息更新：只表达更新中，完成后产出本次变化与行为记录
+  const updating = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-103');
   try {
-    assert.equal(transcribe.F.load().placements.find(item => item.id === 'PL-102').status, 'waiting_transcript');
-    transcribe.F.markTranscriptReady('MT-103');
-    const placement = transcribe.F.load().placements.find(item => item.id === 'PL-102');
-    assert.equal(placement.status, 'done', '转写可用后自动完成客户信息更新');
+    assert.equal(updating.F.load().placements.find(item => item.id === 'PL-102').status, 'updating', '归位后直接进入客户信息更新');
+    click(updating, '.fp-overlay [data-tab="placements"]');
+    assert.match(updating.doc.querySelector('.fp-overlay [data-placement-row="PL-102"]').textContent, /客户信息更新中/, '只表达更新中，不宣告完成');
+    assert.equal(updating.doc.querySelector('.fp-overlay [data-placement-row="PL-102"] [data-action="complete-update"]') !== null, true, '更新中提供演示推进入口');
+    updating.F.completePlacementUpdate('PL-102');
+    const placement = updating.F.load().placements.find(item => item.id === 'PL-102');
+    assert.equal(placement.status, 'done', '更新完成后落到实际结果');
     assert.ok(placement.changeId, '产出对应的本次变化');
     assert.ok(placement.behaviorId, '同批产出行为记录');
-    const change = transcribe.F.load().spaceChanges.find(item => item.id === placement.changeId);
+    const change = updating.F.load().spaceChanges.find(item => item.id === placement.changeId);
     assert.equal(change.source, 'meeting');
     assert.equal(change.space, 'WS-203');
-    assert.deepEqual(transcribe.errors, []);
-  } finally { transcribe.close(); }
+    assert.deepEqual(updating.errors, []);
+  } finally { updating.close(); }
 
   // 4.3 更新失败：原内容保留、只提醒运营、可按归位重试
   const failed = load('meeting-center', '?role=SLS&as=U-1004');
@@ -2343,14 +2850,23 @@ test('R10 录音归位：三方同步唯一来源、商机锚定校验、多空�
     assert.match(drawer.textContent, /客户录音 · 跨客户联合沟通/, '标明来源录音');
     assert.deepEqual(detail.errors, []);
   } finally { detail.close(); }
-  // 转写未就绪的录音依据如实说明，不用摘要冒充原文
+  // 来源内容异常的录音如实说明，不用摘要冒充原文；同步成功后原文随同步一并可读
   const evidence = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-203&tab=followup&sub=recordings');
   try {
     click(evidence, '[data-placement-row="PL-102"] [data-action="source"]');
-    assert.ok(evidence.doc.querySelector('[data-source-unavailable]'), '转写未就绪时不展示原文');
-    assert.match(evidence.doc.querySelector('[data-source-unavailable]').textContent, /转写尚未可用/);
+    const drawer = evidence.doc.querySelector('[data-recording-drawer="MT-103"]');
+    assert.ok(drawer, '录音内容抽屉打开');
+    assert.equal(drawer.querySelector('[data-source-unavailable]'), null, '同步成功的录音不再有来源不可用说明');
+    assert.match(drawer.querySelector('[data-rec-pane="summary"]').textContent, /预算走年度框架/, '三方已转写，智能总结可读');
     assert.deepEqual(evidence.errors, []);
   } finally { evidence.close(); }
+  const broken = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-106');
+  try {
+    const drawer = broken.doc.querySelector('.fp-overlay');
+    assert.match(drawer.querySelector('[data-source-issue]').textContent, /来源内容异常/, '同步失败按来源内容异常处理');
+    assert.equal(drawer.textContent.includes('转写'), false, '页面不出现转写状态措辞');
+    assert.deepEqual(broken.errors, []);
+  } finally { broken.close(); }
 
   // 4.2 空间侧反向关联与正向归位等价；冻结空间不给归位入口
   const reverse = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-201&tab=followup&sub=recordings');
@@ -2380,4 +2896,165 @@ test('R10 录音归位：三方同步唯一来源、商机锚定校验、多空�
     assert.equal(ops.doc.querySelector('[data-recording-row="MT-108"]'), null, '待处理录音不进可归位列表');
     assert.deepEqual(ops.errors, []);
   } finally { ops.close(); }
+});
+
+test('录音内容抽屉：所有录音入口都与移动端同源展示智能总结与录音原文，且不出现转写阶段', () => {
+  // 录音管理详情：默认智能总结，可切录音原文；归位与处理结果仍是独立一段
+  const center = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-101');
+  try {
+    const pane = selector => center.doc.querySelector(selector);
+    assert.equal(pane('[data-rec-pane-tab="summary"]').classList.contains('is-active'), true, '默认落在智能总结');
+    assert.equal(pane('[data-rec-pane="summary"]').hidden, false);
+    assert.equal(pane('[data-rec-pane="transcript"]').hidden, true, '录音原文初始隐藏');
+    assert.match(pane('[data-rec-pane="summary"]').textContent, /关注并发指标与试点计划/, '智能总结给出归纳结论');
+    click(center, '.fp-overlay [data-rec-pane-tab="transcript"]');
+    assert.equal(pane('[data-rec-pane="transcript"]').hidden, false, '可切到录音原文');
+    assert.equal(pane('[data-rec-pane="summary"]').hidden, true, '切换后智能总结让位');
+    assert.match(pane('[data-transcript-body]').textContent, /峰值容量、接入步骤和交付周期/, '录音原文是三方同步的原文而非摘要');
+    assert.match(pane('[data-rec-pane="transcript"]').textContent, /三方已完成转写/, '标明原文来自三方同步');
+    // 全抽屉不出现转写状态或转写阶段措辞
+    for (const banned of ['等待转写', '转写中', '转写失败', '转写可用', '转写未就绪', '最近检查']) {
+      assert.equal(center.doc.querySelector('.fp-overlay').textContent.includes(banned), false, `不应出现转写状态：${banned}`);
+    }
+    click(center, '.fp-overlay [data-tab="placements"]');
+    assert.ok(pane('.fp-overlay [data-action="place"]'), '归位与处理结果页签仍可达');
+    assert.deepEqual(center.errors, []);
+  } finally { center.close(); }
+
+  // 三方已转写的录音：两栏都直接可读，没有等待中的中间态
+  const synced = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-103');
+  try {
+    assert.equal(synced.doc.querySelector('[data-summary-empty]'), null, '同步成功的录音直接有智能总结');
+    assert.match(synced.doc.querySelector('[data-rec-pane="summary"]').textContent, /预算走年度框架/);
+    assert.ok(synced.doc.querySelector('[data-transcript-body]'), '原文随同步一并取得');
+    assert.deepEqual(synced.errors, []);
+  } finally { synced.close(); }
+  // 同步失败按来源内容异常处理：两栏都说明缺位，且都不冒充内容
+  const failedSync = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-106');
+  try {
+    assert.match(failedSync.doc.querySelector('[data-sync-failure]').textContent, /同步失败/);
+    assert.ok(failedSync.doc.querySelector('[data-summary-empty]'), '来源异常时智能总结给空态');
+    assert.match(failedSync.doc.querySelector('[data-source-issue]').textContent, /来源内容异常/);
+    assert.equal(failedSync.doc.querySelector('[data-transcript-body]'), null, '不拿摘要冒充原文');
+    assert.deepEqual(failedSync.errors, []);
+  } finally { failedSync.close(); }
+
+  // 空间录音区：查看原文打开的是同一套两栏，空间侧与录音管理侧看到同样的字段
+  const space = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-202&tab=followup&sub=recordings');
+  try {
+    click(space, '[data-placement-row="PL-105"] [data-action="source"]');
+    const drawer = space.doc.querySelector('[data-recording-drawer="MT-105"]');
+    assert.ok(drawer, '空间侧打开录音内容抽屉');
+    assert.equal(drawer.querySelector('[data-rec-pane-tab="summary"]').classList.contains('is-active'), true, '空间侧同样默认智能总结');
+    assert.match(drawer.querySelector('[data-rec-pane="summary"]').textContent, /两个客户的通道与通知场景/, '空间侧展示智能总结');
+    click(space, '.fp-overlay [data-rec-pane-tab="transcript"]');
+    assert.equal(space.doc.querySelector('[data-rec-pane="transcript"]').hidden, false, '空间侧可切录音原文');
+    assert.ok(space.doc.querySelector('[data-recording-drawer="MT-105"] [data-transcript-body]'), '空间侧录音原文可读');
+    assert.deepEqual(space.errors, []);
+  } finally { space.close(); }
+
+  // 更新历史节点、行为记录依据：指向录音的入口都落到同一套两栏
+  const history = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-202&tab=overview');
+  try {
+    click(history, '[data-open-updates]');
+    click(history, '[data-history-node="CHGX-506"] [data-action="source"]');
+    const drawer = history.doc.querySelector('[data-recording-drawer="MT-102"]');
+    assert.ok(drawer, '更新历史的录音节点打开录音内容');
+    assert.ok(drawer.querySelector('[data-rec-pane-tab="summary"]') && drawer.querySelector('[data-rec-pane-tab="transcript"]'), '两栏齐备');
+    assert.deepEqual(history.errors, []);
+  } finally { history.close(); }
+  const behavior = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-202&tab=followup&sub=behaviors&behavior=BR-502');
+  try {
+    click(behavior, '.fp-overlay [data-action="source"][data-value="meeting:MT-102"]');
+    assert.ok(behavior.doc.querySelector('[data-recording-drawer="MT-102"] [data-rec-pane-tab="summary"]'), '行为记录依据里的录音同样给智能总结');
+    assert.deepEqual(behavior.errors, []);
+  } finally { behavior.close(); }
+
+  // 同一抽屉里并列多段录音内容时各自独立切换，互不串台
+  const multi = load('meeting-center', '?role=SLS&as=U-1004&meeting=MT-101');
+  try {
+    const host = multi.doc.createElement('div');
+    host.innerHTML = multi.F.recordingContent(multi.F.recording('MT-101')) + multi.F.recordingContent(multi.F.recording('MT-102'));
+    multi.doc.body.append(host);
+    multi.F.bindRecordingContent(host);
+    const blocks = host.querySelectorAll('[data-rec-content]');
+    assert.equal(blocks.length, 2, '两段录音内容并列');
+    blocks[1].querySelector('[data-rec-pane-tab="transcript"]').click();
+    assert.equal(blocks[1].querySelector('[data-rec-pane="transcript"]').hidden, false, '第二段可独立切换');
+    assert.equal(blocks[0].querySelector('[data-rec-pane="transcript"]').hidden, true, '第一段不受影响');
+    assert.equal(blocks[0].querySelector('[data-rec-pane="summary"]').hidden, false, '第一段仍停在智能总结');
+  } finally { multi.close(); }
+
+  // 今日该跟依据抽屉：录音依据不再只给一段原文
+  const insight = load('today-follow', '?role=SLS&as=U-1004');
+  try {
+    click(insight, '[data-insight-row="WS-202"] [data-action="evidence"]');
+    const evidence = insight.doc.querySelector('[data-evidence="meeting:MT-102"] [data-evidence-recording]');
+    assert.ok(evidence, '录音依据用录音内容两栏');
+    assert.ok(evidence.querySelector('[data-rec-pane-tab="summary"]') && evidence.querySelector('[data-rec-pane-tab="transcript"]'), '依据里的两栏齐备');
+    click(insight, '[data-evidence="meeting:MT-102"] [data-rec-pane-tab="transcript"]');
+    assert.equal(insight.doc.querySelector('[data-evidence="meeting:MT-102"] [data-rec-pane="transcript"]').hidden, false, '依据里可切录音原文');
+    assert.deepEqual(insight.errors, []);
+  } finally { insight.close(); }
+});
+
+test('空间助手：骨架屏 → 流式答案 → 停止生成，重新生成不留重复，冻结空间只读', async () => {
+  const t = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-201&tab=overview');
+  const wait = ms => new Promise(resolve => t.w.setTimeout(resolve, ms));
+  const overlay = selector => t.doc.querySelector('.fp-overlay ' + selector);
+  try {
+    click(t, '[data-open-assistant]');
+    const field = overlay('[data-qa-field]');
+    field.value = '当前卡点是什么？';
+    overlay('[data-qa-send]').click();
+    // 作答中：先落一条用户批注 + 骨架屏，发送键切换为停止
+    assert.ok(overlay('[data-qa-user] .fp-chat-bubble'), '提问立即留在对话里');
+    assert.ok(overlay('[data-qa-pending] [data-qa-skel]'), '作答前先出骨架屏');
+    assert.equal(overlay('[data-qa-send]').dataset.state, 'stop', '作答中发送键切换为停止');
+    assert.match(overlay('[data-qa-note]').textContent, /正在作答/);
+    // 停止生成：撤掉这条未完成的作答，输入区回到发送态
+    overlay('[data-qa-send]').click();
+    assert.equal(overlay('[data-qa-pending]'), null, '停止后撤掉未完成的作答');
+    assert.equal(overlay('[data-qa-send]').dataset.state, 'send');
+    assert.match(overlay('[data-qa-note]').textContent, /已停止生成/);
+    assert.equal(t.F.load().spaceQA.filter(item => item.space === 'WS-201').length, 0, '停止的作答不写入历史');
+
+    // 重新提问：等骨架屏换成流式答案，出完补依据脚注
+    overlay('[data-qa-field]').value = '当前卡点是什么？';
+    overlay('[data-qa-send]').click();
+    await wait(900);
+    const answered = overlay('[data-qa-item]');
+    assert.ok(answered, '作答完成后成为一条答案');
+    assert.equal(answered.dataset.qaItem, 'answered');
+    assert.equal(overlay('[data-qa-pending]'), null, '骨架屏已让位');
+    assert.ok(answered.querySelector('[data-qa-cite]'), '答案补上依据脚注');
+    assert.equal(overlay('[data-qa-send]').dataset.state, 'send', '作答完成后回到发送态');
+    assert.match(overlay('[data-qa-note]').textContent, /助手只读取当前空间/);
+
+    // 重新生成：替换这一条，不在历史里留重复
+    const before = t.F.load().spaceQA.filter(item => item.space === 'WS-201').length;
+    click(t, '.fp-overlay [data-action="qa-regen"]');
+    await wait(900);
+    assert.equal(t.F.load().spaceQA.filter(item => item.space === 'WS-201').length, before, '重新生成替换原答案，历史不留重复');
+    assert.equal(t.doc.querySelectorAll('.fp-overlay [data-qa-item]').length, 1, '对话里仍只有一条答案');
+    assert.ok(overlay('[data-action="qa-regen"]'), '重新生成入口回到最后一条答案上');
+
+    // 依据是否充分看板块有没有内容：有内容但无原文出处时照样作答，也不编造出处
+    const pendingAnswer = t.F.askSpace('WS-201', '还有哪些待确认？');
+    assert.equal(pendingAnswer.hasEvidence, true, '板块有内容就作答，不因缺原文出处拒答');
+    assert.match(pendingAnswer.answer, /客户侧验收负责人尚未明确/);
+    assert.equal(pendingAnswer.sources.length, 0, '没有原文出处时不编造出处');
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
+
+  // 冻结空间：只读历史，没有任何提问入口
+  const frozen = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-206&tab=overview');
+  try {
+    click(frozen, '[data-open-assistant]');
+    assert.ok(frozen.doc.querySelector('.fp-overlay [data-qa-frozen]'), '冻结空间说明不开放新问答');
+    assert.equal(frozen.doc.querySelector('.fp-overlay [data-qa-field]'), null, '冻结空间不出现输入区');
+    assert.equal(frozen.doc.querySelector('.fp-overlay [data-qa-send]'), null, '冻结空间不出现发送键');
+    assert.equal(frozen.doc.querySelector('.fp-overlay [data-action=ask]'), null, '冻结空间不出现预设问题');
+    assert.deepEqual(frozen.errors, []);
+  } finally { frozen.close(); }
 });

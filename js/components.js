@@ -46,6 +46,9 @@ window.SC = window.SC || {};
     ok: '<circle cx="8" cy="8" r="6"/><path d="M5.3 8.2l1.9 1.9 3.6-3.7"/>',
     x: '<circle cx="8" cy="8" r="6"/><path d="M6 6l4 4M10 6l-4 4"/>',
     sparkles: '<path d="M8 1.6l1.9 4.7 4.7 1.9-4.7 1.9L8 14.8l-1.9-4.7-4.7-1.9 4.7-1.9z"/>',
+    'arrow-right': '<path d="M2.5 8h10.4M8.6 3.7L13 8l-4.4 4.3"/>',
+    stop: '<rect x="4.6" y="4.6" width="6.8" height="6.8" rx="1.6" fill="currentColor" stroke="none"/>',
+    bell: '<path d="M8 1.8a4.2 4.2 0 00-4.2 4.2v2.4c0 .6-.2 1.2-.7 1.6l-.9.8a.6.6 0 00.4 1.1h10.8a.6.6 0 00.4-1.1l-.9-.8a2.2 2.2 0 01-.7-1.6V6A4.2 4.2 0 008 1.8zM6.6 12.9a1.5 1.5 0 002.8 0"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>'
   };
 

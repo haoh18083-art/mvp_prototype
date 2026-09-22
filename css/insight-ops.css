@@ -1,0 +1,146 @@
+/* R13 运营工作台：压缩批次观察区、并排编辑与验证，并让操作栏持续可见。
+ * 仅由 insight-ops.html 加载，沿用公共 tokens；不改变其他业务页的表格与抽屉布局。 */
+body[data-feature="insight-ops"] [hidden] { display: none !important; }
+body[data-feature="insight-ops"] .fp-hint,
+body[data-feature="insight-ops"] .fp-io-version { color: var(--gray-700); }
+[data-insight-ops] { gap: 14px; }
+[data-insight-ops] .fp-panel { border-radius: 6px; }
+[data-insight-ops] .fp-panel-head { min-height: 48px; padding: 10px 16px; }
+[data-insight-ops] .fp-panel-head h2 { font-size: 14px; }
+[data-insight-ops] .fp-panel-head p { margin: 2px 0 0; }
+[data-insight-ops] .btn { min-height: 32px; height: auto; padding: 6px 12px; font-size: 12px; }
+[data-insight-ops] :is(button, summary, textarea, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-insight-ops] :is([data-health-panel], [data-ops-workbench], [data-ops-ledger], [data-results-pane]) { scroll-margin-top: 76px; }
+.fp-io-date { margin-left: 12px; font: 12px var(--font-mono); color: var(--gray-700); }
+
+/* 四态是筛选入口；统一在一条分隔明确的状态带中，不使用四张独立卡片。 */
+[data-insight-ops] .fp-io-health { gap: 0; padding: 0; border-bottom: 1px solid var(--border); }
+[data-insight-ops] .fp-io-health-card { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding: 12px 16px; border: 0; border-right: 1px solid var(--border); border-radius: 0; text-align: left; cursor: pointer; transition: background-color 140ms ease; animation: none; }
+[data-insight-ops] .fp-io-health-card:last-child { border-right: 0; }
+[data-insight-ops] .fp-io-health-card span { align-self: center; color: var(--gray-800); font-size: 12px; font-weight: 600; }
+[data-insight-ops] .fp-io-health-card strong { grid-column: 2; grid-row: 1 / 3; align-self: center; font: 600 24px/1.2 var(--font-mono); margin: 0; }
+[data-insight-ops] .fp-io-health-card small { font-size: 11px; color: var(--gray-700); }
+[data-insight-ops] .fp-io-health-card:hover { background: var(--gray-50); }
+[data-insight-ops] .fp-io-health-card.is-selected { background: var(--brand-50); box-shadow: inset 0 -3px var(--accent); }
+[data-insight-ops] .fp-io-tomorrow { padding: 7px 16px; gap: 6px 10px; border-bottom: 1px solid var(--border); background: var(--gray-25); }
+[data-insight-ops] .fp-io-tomorrow .fp-hint { font-size: 11px; }
+.fp-io-alert { display: flex; align-items: center; gap: 8px; padding: 4px 16px; color: var(--red-700); background: var(--red-50); font-size: 12px; }
+.fp-io-alert .ico { flex: none; }
+.fp-io-alert > span { flex: 1; }
+.fp-io-alert .btn { color: var(--red-700); background: transparent; border-color: transparent; }
+.fp-io-health-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; }
+.fp-io-health-toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+[data-insight-ops] [data-batch-table] { max-height: 360px; overflow: auto; }
+[data-insight-ops] .fp-io-demo { margin: 8px 16px; }
+
+/* 工位显示各自的草稿/验证状态，三份提示词仍可独立编辑，不增加业务阻断。 */
+[data-insight-ops] [data-ops-workbench] { overflow: visible; }
+[data-insight-ops] .fp-io-stations { padding: 0; gap: 0; flex-wrap: nowrap; background: var(--gray-25); }
+[data-insight-ops] .fp-io-station { min-width: 0; padding: 14px 16px; gap: 10px; flex: 1 1 0; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; box-shadow: none; }
+[data-insight-ops] .fp-io-station:hover { background: var(--gray-100); }
+[data-insight-ops] .fp-io-station.is-active { border-bottom-color: var(--accent); background: var(--brand-50); box-shadow: none; }
+[data-insight-ops] .fp-io-station-order { border: 0; border-radius: 4px; background: var(--gray-200); width: 28px; height: 28px; font-size: 11px; }
+[data-insight-ops] .fp-io-station.is-active .fp-io-station-order { background: var(--accent); color: white; }
+[data-insight-ops] .fp-io-station-name { font-size: 14px; }
+[data-insight-ops] .fp-io-station-name small { color: var(--gray-700); font-size: 11px; }
+[data-insight-ops] .fp-io-station-chip { display: grid; gap: 3px; text-align: right; flex: 0 1 auto; }
+[data-insight-ops] .fp-io-station-chip b { font: 600 12px var(--font-mono); }
+[data-insight-ops] .fp-io-station-chip small { color: var(--gray-700); font-size: 11px; }
+[data-insight-ops] .fp-io-station-arrow { font-size: 13px; }
+
+/* 两个连续的操作面，以分隔线取代卡片套卡片。 */
+[data-insight-ops] .fp-io-workbench-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
+[data-insight-ops] .fp-io-editor { padding: 18px; border-right: 1px solid var(--border); border-bottom: 0; }
+[data-insight-ops] .fp-io-sandbox { padding: 18px; display: block; background: var(--gray-25); }
+.fp-io-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.fp-io-pane-head h3 { font-size: 13px; margin: 0; }
+.fp-io-save-state { font-size: 11px; color: var(--gray-700); }
+[data-insight-ops] .fp-io-block--draft { background: transparent; }
+.fp-io-draft-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; font-size: 12px; }
+.fp-io-draft-meta .fp-hint { margin-left: auto; font-size: 11px; }
+.fp-io-draft-form textarea { display: block; width: 100%; min-height: 254px; resize: vertical; padding: 14px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--gray-25); color: var(--text-1); font: 13px/1.95 var(--font-sans); }
+.fp-io-draft-form textarea:focus { background: var(--bg-surface); border-color: var(--accent); }
+.fp-io-editor-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-top: 8px; color: var(--gray-700); font-size: 11px; }
+.fp-io-disclosure { border-top: 1px solid var(--border); margin-top: 12px; }
+.fp-io-disclosure summary { cursor: pointer; padding: 12px 0; font-size: 12px; font-weight: 600; }
+.fp-io-disclosure summary span { margin-left: 8px; color: var(--gray-700); font-weight: 400; }
+body[data-feature="insight-ops"] .fp-io-body { white-space: pre-wrap; background: var(--gray-50); border-radius: 4px; font-size: 13px; line-height: 1.85; }
+[data-insight-ops] [data-baseline] .fp-io-body { max-height: 200px; overflow: auto; }
+[data-insight-ops] .fp-error:empty { display: none; }
+[data-insight-ops] .fp-error { margin: 8px 0 0; }
+[data-insight-ops] .fp-io-sandbox-badge { padding: 3px 7px; border: 0; border-radius: 3px; background: var(--amber-100); color: var(--amber-700); font-size: 11px; }
+.fp-io-view-tabs { display: flex; gap: 20px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.fp-io-view-tabs button { min-height: 34px; padding: 0 0 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--gray-700); font: 12px var(--font-sans); cursor: pointer; }
+.fp-io-view-tabs button.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.fp-io-view-tabs button span { font-size: 11px; margin-left: 6px; font-weight: 400; }
+[data-insight-ops] [data-trial-form] { gap: 10px; }
+[data-insight-ops] .fp-io-mini { background: transparent; color: var(--accent); border-color: var(--border); border-radius: 3px; }
+[data-insight-ops] .fp-io-samples { max-height: 230px; border-radius: 3px; padding: 0; gap: 0; }
+[data-insight-ops] .fp-io-sample { align-items: center; min-height: 47px; padding: 8px 10px; gap: 10px; border-bottom: 1px solid var(--gray-100); cursor: pointer; }
+[data-insight-ops] .fp-io-sample:last-child { border-bottom: 0; }
+[data-insight-ops] .fp-io-sample:hover { background: var(--gray-50); }
+[data-insight-ops] .fp-io-sample:has(input:checked) { background: var(--brand-50); box-shadow: inset 2px 0 var(--accent); }
+[data-insight-ops] .fp-io-sample small { display: block; margin-top: 3px; color: var(--gray-700); font-size: 11px; }
+[data-insight-ops] input[type="checkbox"], [data-insight-ops] input[type="radio"] { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
+.fp-io-upstream-options { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-insight-ops] .fp-io-upstream { gap: 4px; }
+[data-insight-ops] .fp-io-upstream-card { padding: 7px 9px; flex: 1; border-radius: 3px; font-size: 12px; white-space: nowrap; }
+.fp-io-result-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+.fp-io-result-meta span { font-size: 11px; color: var(--gray-700); }
+.fp-io-diff-filter { display: flex; align-items: center; gap: 7px; margin: 12px 0; font-size: 12px; cursor: pointer; }
+.fp-io-result-empty { padding: 52px 14px; text-align: center; color: var(--gray-700); font-size: 12px; }
+.fp-io-result-empty strong { display: block; color: var(--text-1); font-size: 14px; }
+.fp-io-result-empty p { margin: 10px 0 16px; line-height: 1.8; }
+
+/* 对照表保留列关系，覆盖公共窄容器的信息卡规则；手机允许横向滚动。 */
+[data-insight-ops] [data-trial-result] { max-height: 320px; overflow: auto; border: 1px solid var(--border); background: var(--bg-surface); }
+[data-insight-ops] .fp-io-result .fp-data-table-wrap { overflow: auto; }
+[data-insight-ops] .fp-io-diff-table { display: table; width: 100%; min-width: 440px; table-layout: fixed; }
+[data-insight-ops] .fp-io-diff-table thead { position: static; display: table-header-group; width: auto; height: auto; overflow: visible; clip: auto; }
+[data-insight-ops] .fp-io-diff-table tbody { display: table-row-group; }
+[data-insight-ops] .fp-io-diff-table tr { display: table-row; width: auto; height: auto; animation: none; }
+[data-insight-ops] .fp-io-diff-table :is(th, td) { display: table-cell; width: auto; min-width: 0; padding: 10px; border-bottom: 1px solid var(--border); font-size: 12px; text-align: left; white-space: normal; }
+[data-insight-ops] .fp-io-diff-table :is(th, td):first-child { width: 31%; }
+[data-insight-ops] .fp-io-diff-table :is(th, td):last-child { width: 19%; }
+[data-insight-ops] .fp-io-diff-table .fp-table-cell-label { display: none; }
+[data-insight-ops] .fp-io-diff { background: var(--amber-50); }
+[data-insight-ops] .fp-io-diff-new { font-weight: 600; animation: none; }
+
+/* 操作吸附在工作面底部；按保存状态和试跑结果切换主动作，窄屏允许换行。 */
+.fp-io-command { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--border-strong); border-radius: 0 0 6px 6px; background: var(--bg-surface); box-shadow: 0 -3px 10px rgba(20, 46, 69, .04); }
+.fp-io-command-state { display: grid; gap: 3px; font-size: 12px; }
+.fp-io-command-state span { font-size: 11px; color: var(--gray-700); }
+[data-insight-ops] .fp-io-command .btn { min-height: 36px; padding-inline: 16px; }
+[data-insight-ops] [data-schedule-default], [data-insight-ops] [data-schedule-batch] { grid-template-columns: minmax(180px, 1fr) 160px auto; align-items: end; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+[data-insight-ops] [data-schedule-default] h2, [data-insight-ops] [data-schedule-batch] h2 { font-size: 13px; }
+[data-insight-ops] [data-schedule-default] p, [data-insight-ops] [data-schedule-batch] p { font-size: 12px; color: var(--gray-700); }
+
+@media (max-width: 1280px) {
+  [data-insight-ops] .fp-io-station { padding: 12px; flex-wrap: wrap; }
+  [data-insight-ops] .fp-io-station-chip { width: 100%; text-align: left; margin-left: 38px; display: flex; align-items: center; gap: 8px; }
+}
+@media (max-width: 960px) {
+  [data-insight-ops] .fp-io-workbench-grid { grid-template-columns: minmax(0, 1fr); }
+  [data-insight-ops] .fp-io-editor { border-right: 0; border-bottom: 1px solid var(--border); }
+  [data-insight-ops] .fp-io-draft-form textarea { min-height: 190px; }
+  [data-insight-ops] .fp-io-health-card small { display: none; }
+  [data-insight-ops] .fp-io-health-card strong { grid-row: 1; }
+}
+@media (max-width: 600px) {
+  [data-insight-ops] .fp-panel-head { align-items: flex-start; flex-wrap: wrap; }
+  [data-insight-ops] .fp-io-health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-insight-ops] .fp-io-health-card { border-bottom: 1px solid var(--border); }
+  [data-insight-ops] .fp-io-stations { flex-wrap: nowrap; }
+  [data-insight-ops] .fp-io-station { padding: 10px 8px; flex-basis: 0; }
+  [data-insight-ops] .fp-io-station-name small, [data-insight-ops] .fp-io-station-order, [data-insight-ops] .fp-io-station-chip b, [data-insight-ops] .fp-io-station-arrow { display: none; }
+  [data-insight-ops] .fp-io-station-chip { margin: 0; }
+  [data-insight-ops] .fp-io-editor, [data-insight-ops] .fp-io-sandbox { padding: 14px; }
+  .fp-io-command { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+  .fp-io-command .fp-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  [data-insight-ops] .fp-io-command .btn { min-height: 44px; padding-inline: 4px; }
+  [data-insight-ops] :is(.fp-io-view-tabs button, .fp-io-mini, summary) { min-height: 44px; }
+  [data-insight-ops] [data-schedule-default], [data-insight-ops] [data-schedule-batch] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-insight-ops] *, body[data-feature="insight-ops"] .fp-io-timeline .is-next { animation: none !important; transition: none !important; }
+}

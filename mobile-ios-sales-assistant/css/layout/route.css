@@ -1,14 +1,14 @@
-/* 根目录入口：三端体验选择卡。 */
-.route-page { min-height: 100vh; padding: 60px 24px; background: var(--shell-bg); }
+/* 目录入口页（index.html）：入口选择卡。 */
+.route-page { min-height: 100vh; padding: var(--space-12) var(--space-6); background: var(--shell-bg); }
 .route-wrap { width: min(100%, 960px); margin: 0 auto; }
-.route-kicker { color: var(--accent); font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; }
-.route-page h1 { max-width: 650px; margin-top: 14px; font-size: clamp(32px, 5vw, 58px); }
-.route-page > .route-wrap > p { max-width: 620px; margin-top: 16px; color: var(--muted); font-size: 15px; }
-.route-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 42px; }
-.route-card { display: flex; flex-direction: column; min-height: 210px; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); transition: transform var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard); }
+.route-kicker { color: var(--accent); font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: var(--tracking-mono); }
+.route-page h1 { max-width: 650px; margin-top: var(--space-3); font-size: clamp(var(--text-2xl), 5vw, var(--text-3xl)); font-weight: var(--weight-display); line-height: var(--leading-tight); letter-spacing: var(--tracking-display); }
+.route-page > .route-wrap > p { max-width: 620px; margin-top: var(--space-4); color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+.route-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); margin-top: var(--space-10); }
+.route-card { display: flex; flex-direction: column; min-height: 210px; padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); transition: transform var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard); }
 .route-card:hover { border-color: color-mix(in oklab, var(--accent), var(--border) 55%); transform: translateY(-3px); box-shadow: var(--elev-raised); }
-.route-number { color: var(--accent); font-family: var(--font-mono); font-size: 12px; }
-.route-card h2 { margin-top: 28px; font-size: 19px; }
-.route-card p { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.route-card .route-link { display: inline-flex; align-items: center; gap: 5px; margin-top: auto; padding-top: 20px; color: var(--accent); font-size: 12px; font-weight: 650; }
-.route-foot { margin-top: 32px; color: var(--muted); font-size: 12px; }
+.route-number { color: var(--accent); font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: var(--tracking-mono); }
+.route-card h2 { margin-top: var(--space-7); font-size: var(--text-lg); font-weight: var(--weight-display); line-height: var(--leading-tight); }
+.route-card p { margin-top: var(--space-2); color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-relaxed); }
+.route-card .route-link { display: inline-flex; align-items: center; gap: var(--space-1); margin-top: auto; padding-top: var(--space-5); color: var(--accent); font-size: var(--text-xs); font-weight: var(--weight-title); }
+.route-foot { margin-top: var(--space-8); color: var(--muted); font-size: var(--text-xs); }
