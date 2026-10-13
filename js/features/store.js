@@ -1256,117 +1256,117 @@
 
   /* ---------- R17 销售目标与进度：目标、DataHub 收入成本与取数异常 ---------- */
 
-  /**
-   * R17 目标样例：覆盖全员/个人 × 流水/毛利、调整留痕、重叠区间、零目标、
-   * 未开始区间、已结束区间、无目标有达成（U-1006）与个人之和 ≠ 全员（差异提示）全部分支。
-   * 当前值原地更新，历史只追加进 adjustments，满足「不覆盖、可回看」。
-   */
+  /** 财务原型使用当前自然月及前两月的虚构样例，不读取真实业务数据。 */
+  F.financeToday = () => F.now().slice(0, 10);
+  F.financeMonth = (offset = 0) => {
+    const [year, month] = F.financeToday().slice(0, 7).split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1 + offset, 1));
+    return date.toISOString().slice(0, 7);
+  };
+  F.monthRange = month => {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')) return null;
+    const [year, num] = month.split('-').map(Number);
+    return [month + '-01', month + '-' + new Date(Date.UTC(year, num, 0)).getUTCDate()];
+  };
+
+  /** 毛利目标仅保留个人和全员两级，调整记录单独保存。 */
   function demoGoals() {
+    const [start, end] = F.monthRange(F.financeMonth());
     return [
-      { id: 'GT-1', level: 'all', metric: 'revenue', sales: '', value: 6000000, start: '2026-09-01', end: '2026-10-15', createdBy: 'U-1002', createdAt: '2026-09-01 09:00', adjustments: [] },
-      { id: 'GT-2', level: 'all', metric: 'profit', sales: '', value: 1800000, start: '2026-09-01', end: '2026-10-15', createdBy: 'U-1002', createdAt: '2026-09-01 09:00', adjustments: [] },
-      { id: 'GT-3', level: 'personal', metric: 'revenue', sales: 'U-1004', value: 2000000, start: '2026-09-01', end: '2026-10-15', createdBy: 'U-1002', createdAt: '2026-09-01 09:20', adjustments: [] },
-      // 毛利目标带一次调整留痕：50 万 → 60 万，历史快照保留在 adjustments。
-      { id: 'GT-4', level: 'personal', metric: 'profit', sales: 'U-1004', value: 600000, start: '2026-09-01', end: '2026-10-15', createdBy: 'U-1002', createdAt: '2026-09-01 09:20', adjustments: [
-        { at: '2026-09-08 10:20', actor: 'U-1002', before: { value: 500000, start: '2026-09-01', end: '2026-10-15' }, after: { value: 600000, start: '2026-09-01', end: '2026-10-15' }, reason: '9 月新签 pipeline 高于预期，毛利目标上调 10 万。' }
+      { id: 'GT-2', level: 'all', metric: 'profit', sales: '', value: 180000, start, end, createdBy: 'U-1002', createdAt: start + ' 09:00', adjustments: [] },
+      { id: 'GT-4', level: 'personal', metric: 'profit', sales: 'U-1004', value: 80000, start, end, createdBy: 'U-1002', createdAt: start + ' 09:20', adjustments: [
+        { at: start + ' 10:20', actor: 'U-1002', before: { value: 70000, start, end }, after: { value: 80000, start, end }, reason: '本月客户业务增长，调整毛利目标。' }
       ] },
-      // 与 GT-3 同销售同指标且区间相交：允许保存，列表提示重叠。
-      { id: 'GT-5', level: 'personal', metric: 'revenue', sales: 'U-1004', value: 500000, start: '2026-09-10', end: '2026-09-30', createdBy: 'U-1002', createdAt: '2026-09-10 11:00', adjustments: [] },
-      // U-1005 只有流水目标，毛利指标保持「未设置」。
-      { id: 'GT-6', level: 'personal', metric: 'revenue', sales: 'U-1005', value: 1200000, start: '2026-09-01', end: '2026-10-15', createdBy: 'U-1002', createdAt: '2026-09-01 09:25', adjustments: [] },
-      // 零目标：明确设零，与「未设置」区分，不计算进度。
-      { id: 'GT-7', level: 'personal', metric: 'profit', sales: 'U-1008', value: 0, start: '2026-09-01', end: '2026-10-15', createdBy: 'U-1002', createdAt: '2026-09-01 09:30', adjustments: [] },
-      // 尚未开始区间：保存成功，进度为零并标注。
-      { id: 'GT-8', level: 'personal', metric: 'revenue', sales: 'U-1013', value: 300000, start: '2026-10-01', end: '2026-10-31', createdBy: 'U-1002', createdAt: '2026-09-12 15:00', adjustments: [] },
-      // 已结束区间：保留可回看，进度定格。
-      { id: 'GT-9', level: 'personal', metric: 'revenue', sales: 'U-1014', value: 400000, start: '2026-08-01', end: '2026-08-31', createdBy: 'U-1002', createdAt: '2026-08-01 09:00', adjustments: [] }
+      { id: 'GT-6', level: 'personal', metric: 'profit', sales: 'U-1005', value: 50000, start, end, createdBy: 'U-1002', createdAt: start + ' 09:30', adjustments: [] },
+      { id: 'GT-7', level: 'personal', metric: 'profit', sales: 'U-1008', value: 0, start, end, createdBy: 'U-1002', createdAt: start + ' 09:30', adjustments: [] }
     ];
   }
 
   /**
-   * R17 DataHub 标准收入表样例：salesId 是「跟进人 → 本地销售」的对应结果，空表示未归属。
-   * 覆盖：区间内已归属多条、区间外一条（RV-6）、跟进人为空（RV-8）、跟进人无法对应（RV-9）、
-   * 缺收入结算时间（RV-10）、同指纹重复行（RV-11）、成本高于收入的负毛利行（RV-5）；
-   * RV-2 带核减金额——本版流水不扣核减，口径待确认（待明确事项 7.4）。
+   * 收入样例按销售字段归属；跟进人故意不同，验证不会错误替代销售。
+   * pair 标识仅为虚构样例里已核对的收入成本关系，不代表真实配对规则已确定。
    */
   function demoRevenueRows() {
+    const month = F.financeMonth(), previous = F.financeMonth(-1), older = F.financeMonth(-2);
+    const names = { 'C-1001': '星辰科技有限公司', 'C-1002': '远山物流有限公司', 'C-1003': '启明教育科技有限公司', 'C-1005': '海川保险服务有限公司' };
+    const sales = { 'U-1004': '付赞', 'U-1005': '张云飞', 'U-1008': '杨锐' };
+    const row = (id, customerId, salesId, productType, receivableAmount, settledAmount, bookMonth, settledMonth) => ({
+      id, customerId, customerName: names[customerId] || '待对应客户', salesId, salesName: sales[salesId] || '', follower: '李靖',
+      productType, receivableAmount, settledAmount, bookDate: bookMonth + '-03', settledAt: settledMonth ? settledMonth + '-06 10:00' : '',
+      company: '演示主体', dimsKey: id, fingerprint: 'FP-' + id, dataStage: '原始产品类型',
+      unattributedReason: salesId ? '' : '销售为空', bizUpdatedAt: F.financeToday() + ' 06:30'
+    });
     return [
-      { id: 'RV-1', settledAmount: 800000, deductAmount: 0, settledAt: '2026-09-03 10:00', bookDate: '2026-09-03', follower: '付赞', salesId: 'U-1004', unattributedReason: '', customerName: '星辰科技有限公司', dimsKey: 'DIM-1', fingerprint: 'FP-RV-1', bizUpdatedAt: '2026-09-14 22:10' },
-      { id: 'RV-2', settledAmount: 950000, deductAmount: 50000, settledAt: '2026-09-10 15:00', bookDate: '2026-09-10', follower: '付赞', salesId: 'U-1004', unattributedReason: '', customerName: '远山物流有限公司', dimsKey: 'DIM-2', fingerprint: 'FP-RV-2', bizUpdatedAt: '2026-09-14 22:10' },
-      { id: 'RV-3', settledAmount: 600000, deductAmount: 0, settledAt: '2026-09-05 11:00', bookDate: '2026-09-05', follower: '张云飞', salesId: 'U-1005', unattributedReason: '', customerName: '启明教育科技有限公司', dimsKey: 'DIM-3', fingerprint: 'FP-RV-3', bizUpdatedAt: '2026-09-14 22:10' },
-      { id: 'RV-4', settledAmount: 300000, deductAmount: 0, settledAt: '2026-09-08 14:00', bookDate: '2026-09-08', follower: '张忠超', salesId: 'U-1006', unattributedReason: '', customerName: '和光医疗科技有限公司', dimsKey: 'DIM-4', fingerprint: 'FP-RV-4', bizUpdatedAt: '2026-09-14 22:10' },
-      // 成本高于收入的负毛利行：如实计入，不按零处理。
-      { id: 'RV-5', settledAmount: 200000, deductAmount: 0, settledAt: '2026-09-06 09:30', bookDate: '2026-09-06', follower: '杨锐', salesId: 'U-1008', unattributedReason: '', customerName: '海川保险服务有限公司', dimsKey: 'DIM-5', fingerprint: 'FP-RV-5', bizUpdatedAt: '2026-09-14 22:10' },
-      // 区间外收入：不计入 2026-09-01 ~ 2026-10-15 的任何目标。
-      { id: 'RV-6', settledAmount: 120000, deductAmount: 0, settledAt: '2026-08-20 10:00', bookDate: '2026-08-20', follower: '付赞', salesId: 'U-1004', unattributedReason: '', customerName: '星辰科技有限公司', dimsKey: 'DIM-6', fingerprint: 'FP-RV-6', bizUpdatedAt: '2026-09-14 22:10' },
-      // U-1014 已结束区间（8 月）的达成：进度定格用。
-      { id: 'RV-7', settledAmount: 500000, deductAmount: 0, settledAt: '2026-08-15 10:00', bookDate: '2026-08-15', follower: '何明轩', salesId: 'U-1014', unattributedReason: '', customerName: '云桥数字科技有限公司', dimsKey: 'DIM-7', fingerprint: 'FP-RV-7', bizUpdatedAt: '2026-09-14 22:10' },
-      // 未归属：跟进人为空，仍计入全员。
-      { id: 'RV-8', settledAmount: 150000, deductAmount: 0, settledAt: '2026-09-07 10:00', bookDate: '2026-09-07', follower: '', salesId: '', unattributedReason: '跟进人为空', customerName: '澄海零售有限公司', dimsKey: 'DIM-8', fingerprint: 'FP-RV-8', bizUpdatedAt: '2026-09-14 22:10' },
-      // 未归属：跟进人无法对应本地销售账号（与 R01 待对应人员同源样例）。
-      { id: 'RV-9', settledAmount: 90000, deductAmount: 0, settledAt: '2026-09-09 16:00', bookDate: '2026-09-09', follower: '赵伟航', salesId: '', unattributedReason: '跟进人无法对应本地账号', customerName: '云桥数字科技有限公司', dimsKey: 'DIM-9', fingerprint: 'FP-RV-9', bizUpdatedAt: '2026-09-14 22:10' },
-      // 缺收入结算时间：进入异常清单，不参与有效归集。
-      { id: 'RV-10', settledAmount: 70000, deductAmount: 0, settledAt: '', bookDate: '2026-09-11', follower: '张云飞', salesId: 'U-1005', unattributedReason: '', customerName: '启明教育科技有限公司', dimsKey: 'DIM-10', fingerprint: 'FP-RV-10', bizUpdatedAt: '2026-09-14 22:10' },
-      // 与 RV-2 同指纹的重复同步行：按数据指纹去重，只计第一次。
-      { id: 'RV-11', settledAmount: 950000, deductAmount: 50000, settledAt: '2026-09-10 15:00', bookDate: '2026-09-10', follower: '付赞', salesId: 'U-1004', unattributedReason: '', customerName: '远山物流有限公司', dimsKey: 'DIM-2', fingerprint: 'FP-RV-2', bizUpdatedAt: '2026-09-15 05:40' }
+      row('RV-1', 'C-1001', 'U-1004', '来电名片', 120000, 115000, month, month),
+      row('RV-2', 'C-1001', 'U-1004', '短信号码认证', 60000, null, month, ''),
+      row('RV-3', 'C-1001', 'U-1004', '按次-其他-1010号码-低消', 18000, 18000, month, month),
+      row('RV-4', 'C-1001', 'U-1004', '语音通知', 20000, 20000, month, month),
+      row('RV-5', 'C-1001', 'U-1005', '来电名片', 80000, 80000, month, month),
+      row('RV-6', 'C-1001', 'U-1004', '来电名片', 100000, 95000, previous, previous),
+      row('RV-7', 'C-1001', 'U-1004', '短信号码认证', 45000, 45000, previous, month),
+      row('RV-8', 'C-1001', 'U-1004', '按次-其他-1010号码-低消', 15000, 15000, older, older),
+      row('RV-9', 'C-1002', 'U-1004', '来电名片', 50000, null, month, ''),
+      row('RV-10', 'C-1003', 'U-1005', '短信号码认证', 75000, 75000, month, month),
+      row('RV-11', 'C-1005', 'U-1008', '来电名片', 10000, 10000, month, month),
+      row('RV-12', 'C-1003', '', '来电名片', 9000, 9000, month, month),
+      row('RV-13', 'C-1001', 'U-1004', '零费用业务', 0, 0, month, month),
+      row('RV-14', 'C-1001', 'U-1004', '待补收入', null, null, month, ''),
+      row('RV-15', 'C-1001', 'U-1004', '来电名片', 9000, 9000, previous, previous)
     ];
   }
 
-  /**
-   * R17 DataHub 标准成本表样例：成本按配对维度匹配收入行并随收入归集（不按成本自己的记账日期）；
-   * CS-9 配不上任何收入行，不计入毛利并进入异常清单。
-   */
+  /** 未结算成本取预计，已结算成本取结算值；保留缺失与明确零的区别。 */
   function demoCostRows() {
-    return [
-      { id: 'CS-1', costAmount: 500000, costSettled: true, bookDate: '2026-09-03', follower: '付赞', customerName: '星辰科技有限公司', dimsKey: 'DIM-1', matchedRevenue: 'RV-1', fingerprint: 'FP-CS-1' },
-      { id: 'CS-2', costAmount: 550000, costSettled: true, bookDate: '2026-09-10', follower: '付赞', customerName: '远山物流有限公司', dimsKey: 'DIM-2', matchedRevenue: 'RV-2', fingerprint: 'FP-CS-2' },
-      { id: 'CS-3', costAmount: 400000, costSettled: true, bookDate: '2026-09-05', follower: '张云飞', customerName: '启明教育科技有限公司', dimsKey: 'DIM-3', matchedRevenue: 'RV-3', fingerprint: 'FP-CS-3' },
-      { id: 'CS-4', costAmount: 180000, costSettled: true, bookDate: '2026-09-08', follower: '张忠超', customerName: '和光医疗科技有限公司', dimsKey: 'DIM-4', matchedRevenue: 'RV-4', fingerprint: 'FP-CS-4' },
-      // 26 万成本高于 RV-5 的 20 万收入：单行毛利 -6 万，如实展示。
-      { id: 'CS-5', costAmount: 260000, costSettled: true, bookDate: '2026-09-06', follower: '杨锐', customerName: '海川保险服务有限公司', dimsKey: 'DIM-5', matchedRevenue: 'RV-5', fingerprint: 'FP-CS-5' },
-      { id: 'CS-6', costAmount: 80000, costSettled: true, bookDate: '2026-08-20', follower: '付赞', customerName: '星辰科技有限公司', dimsKey: 'DIM-6', matchedRevenue: 'RV-6', fingerprint: 'FP-CS-6' },
-      { id: 'CS-7', costAmount: 250000, costSettled: true, bookDate: '2026-08-15', follower: '何明轩', customerName: '云桥数字科技有限公司', dimsKey: 'DIM-7', matchedRevenue: 'RV-7', fingerprint: 'FP-CS-7' },
-      { id: 'CS-8', costAmount: 30000, costSettled: true, bookDate: '2026-09-07', follower: '', customerName: '澄海零售有限公司', dimsKey: 'DIM-8', matchedRevenue: 'RV-8', fingerprint: 'FP-CS-8' },
-      // 配对维度找不到收入行：不计入毛利，单独标注待核对。
-      { id: 'CS-9', costAmount: 45000, costSettled: true, bookDate: '2026-09-12', follower: '付赞', customerName: '星辰科技有限公司', dimsKey: 'DIM-X', matchedRevenue: '', fingerprint: 'FP-CS-9' }
-    ];
+    const amounts = {
+      'RV-1': [true, 79000, 80000], 'RV-2': [false, 38000, null], 'RV-3': [false, 12500, null],
+      'RV-5': [true, 49000, 50000], 'RV-6': [true, 68000, 70000], 'RV-7': [true, 28000, 30000],
+      'RV-8': [true, 9500, 10000], 'RV-9': [false, 30000, null], 'RV-10': [true, 43000, 45000],
+      'RV-11': [true, 16000, 18000], 'RV-12': [true, 6000, 6000], 'RV-13': [true, 0, 0],
+      'RV-14': [false, 3000, null], 'RV-15': [true, 5000, null]
+    };
+    return demoRevenueRows().filter(row => amounts[row.id]).map(row => {
+      const [costSettled, estimatedCostAmount, settlementCostAmount] = amounts[row.id];
+      return { id: row.id.replace('RV', 'CS'), matchedRevenue: row.id, customerId: row.customerId, customerName: row.customerName,
+        salesId: row.salesId, salesName: row.salesName, productType: row.productType, company: row.company, bookDate: row.bookDate,
+        costSettled, estimatedCostAmount, settlementCostAmount, fingerprint: 'COST-' + row.id, dimsKey: row.dimsKey };
+    });
   }
 
-  /** R17 取数异常清单样例：成本未配对、时间缺失、重复去重各一条，不静默为零。 */
-  function demoDatahubErrors() {
-    return [
-      { id: 'DHE-1', kind: 'cost_unmatched', ref: 'CS-9', reason: '成本行按配对维度找不到对应收入行，不计入毛利，待 DataHub 侧核对。', at: '2026-09-15 06:30' },
-      { id: 'DHE-2', kind: 'missing_time', ref: 'RV-10', reason: '收入行缺少收入结算时间，不参与有效归集。', at: '2026-09-15 06:30' },
-      { id: 'DHE-3', kind: 'duplicate', ref: 'RV-11', reason: '数据指纹与 RV-2 相同，视为同一条，不重复累加。', at: '2026-09-15 06:30' }
-    ];
-  }
+  function demoDatahubErrors() { return []; }
 
-  /**
-   * R17 DataHub 收入成本同步状态与取数白名单。
-   * 与 platform-data 页的「DataHub 演示批次」（客户数据治理）同名不同物，本域统一叫「DataHub 收入成本同步」。
-   */
+  /** 本地演示来源说明；正式系统的数据同步、币种与配对仍依赖 R17 的验收。 */
   function demoDatahub() {
     return {
-      status: 'ok', lastSuccessAt: '2026-09-15 06:30', lastAttemptAt: '2026-09-15 06:30', failReason: '',
+      status: 'ok', lastSuccessAt: F.financeToday() + ' 06:30', lastAttemptAt: F.financeToday() + ' 06:30', failReason: '',
+      coveredMonths: [F.financeMonth(), F.financeMonth(-1), F.financeMonth(-2)], demo: true,
       whitelist: [
-        { table: '标准收入表', field: '结算金额', purpose: '流水达成与毛利计算的收入项', used: true },
-        { table: '标准收入表', field: '核减金额', purpose: '与结算金额的关系待确认（待明确事项 7.4），本版不从流水中扣除', used: false },
-        { table: '标准收入表', field: '收入结算时间', purpose: '归集到目标区间的依据', used: true },
-        { table: '标准收入表', field: '记账日期', purpose: '辅助核对与配对', used: true },
-        { table: '标准收入表', field: '跟进人', purpose: '归属到本地销售的依据', used: true },
-        { table: '标准收入表', field: '客户名称、客户池', purpose: '与本系统客户对应、按池查看', used: true },
-        { table: '标准收入表', field: '配对维度组（我方主体 / 产品类型 / 数据科目 / 通信类型 / 账期 / 基座）', purpose: '与成本表配对', used: true },
-        { table: '标准收入表', field: '业绩核算、数据阶段', purpose: '含义待确认（待明确事项 7.2），取回留存、不参与计算', used: false },
-        { table: '标准收入表', field: '最近业务更新时间、数据指纹', purpose: '判断数据变化与重复去重', used: true },
-        { table: '标准成本表', field: '结算成本金额', purpose: '毛利计算的成本项', used: true },
-        { table: '标准成本表', field: '成本是否已结算', purpose: '未结算成本是否计入待确认（待明确事项 7.5），本版暂计入', used: true },
-        { table: '标准成本表', field: '记账日期、跟进人、客户名称、客户池', purpose: '配对与归属校验', used: true },
-        { table: '标准成本表', field: '配对维度组（同标准收入表）', purpose: '与收入表配对', used: true },
-        { table: '标准成本表', field: '业绩核算、数据阶段', purpose: '含义待确认（待明确事项 7.2），取回留存、不参与计算', used: false },
-        { table: '标准成本表', field: '最近业务更新时间、数据指纹', purpose: '判断数据变化与重复去重', used: true }
+        { table: '业务收入汇总', field: '客户名称、销售', purpose: '对应当前客户—销售绑定；跟进人不参与归属', used: true },
+        { table: '收入与成本汇总', field: '产品类型', purpose: '保留原始值并直接汇总，不按基座重新分类', used: true },
+        { table: '业务收入汇总', field: '应收金额', purpose: '毛利计算收入项，不再次扣核减或返点', used: true },
+        { table: '业务收入汇总', field: '结算金额', purpose: '仅用于流水总数', used: true },
+        { table: '业务收入汇总', field: '记账日期', purpose: '毛利月份及目标区间归集依据', used: true },
+        { table: '业务收入汇总', field: '收入结算时间', purpose: '收入结算状态的唯一来源；流水统计日期', used: true },
+        { table: '业务成本汇总', field: '成本是否已结算', purpose: '选择预计或结算成本，并参与毛利状态判断', used: true },
+        { table: '业务成本汇总', field: '预估成本金额、结算成本金额', purpose: '未结算取预估成本，已结算取结算成本；缺失待核对', used: true },
+        { table: '收入与成本汇总', field: '我方主体、记账日期及对应业务', purpose: '核对收入与成本；样例使用已核对关联，真实配对规则待确认', used: true },
+        { table: '业务收入汇总', field: '跟进人、数据阶段', purpose: '辅助核对，不覆盖销售归属或收入结算状态', used: false }
       ]
     };
   }
+
+  /** 只升级财务演示域，完整保留旧样例及目标，不清理其他模块的本地编辑。 */
+  function migrateFinance(state) {
+    if (state.financeVersion === 2) return;
+    state.legacyFinance = { goals: copy(state.goals || []), revenueRows: copy(state.revenueRows || []), costRows: copy(state.costRows || []) };
+    const retained = (state.goals || []).filter(goal => goal.metric === 'profit');
+    state.goals = retained.length ? retained : demoGoals();
+    state.revenueRows = demoRevenueRows(); state.costRows = demoCostRows();
+    state.datahub = { ...demoDatahub(), status: state.datahub?.status || 'ok', ...(state.datahub?.status === 'never' ? { lastSuccessAt: '' } : {}) };
+    state.datahubErrors = []; state.financeVersion = 2;
+  }
+
+  /** 金额缺失返回 null；不能用 Number(null) 把来源缺失转换为零。 */
+  F.financeNumber = value => value === null || value === undefined || typeof value === 'boolean' || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
 
   /** 统一补齐目标字段，兼容 R17 上线前的旧演示快照；adjustments 只追加不覆盖。 */
   function normalizeGoal(item, index) {
@@ -1375,7 +1375,7 @@
       ...goal,
       id: goal.id || `GT-${index + 1}`,
       level: goal.level === 'personal' ? 'personal' : 'all',
-      metric: goal.metric === 'profit' ? 'profit' : 'revenue',
+      metric: 'profit',
       sales: goal.level === 'personal' ? String(goal.sales || '') : '',
       value: Number.isFinite(Number(goal.value)) ? Number(goal.value) : 0,
       start: String(goal.start || ''), end: String(goal.end || ''),
@@ -1389,13 +1389,14 @@
     };
   }
 
-  /** 统一补齐收入行字段；salesId 为跟进人对应结果，空表示未归属（跟进人为空或对应不上）。 */
+  /** 统一补齐收入行字段；salesId 为原数据销售对应结果，空表示未归属。 */
   function normalizeRevenueRow(item, index) {
     const row = item || {};
     return {
       ...row,
       id: row.id || `RV-${index + 1}`,
-      settledAmount: Number.isFinite(Number(row.settledAmount)) ? Number(row.settledAmount) : 0,
+      settledAmount: F.financeNumber(row.settledAmount),
+      receivableAmount: F.financeNumber(row.receivableAmount),
       deductAmount: Number.isFinite(Number(row.deductAmount)) ? Number(row.deductAmount) : 0,
       settledAt: String(row.settledAt || ''), bookDate: String(row.bookDate || ''),
       follower: String(row.follower || ''), salesId: String(row.salesId || ''),
@@ -1411,8 +1412,9 @@
     return {
       ...row,
       id: row.id || `CS-${index + 1}`,
-      costAmount: Number.isFinite(Number(row.costAmount)) ? Number(row.costAmount) : 0,
-      costSettled: row.costSettled !== false,
+      estimatedCostAmount: F.financeNumber(row.estimatedCostAmount),
+      settlementCostAmount: F.financeNumber(row.settlementCostAmount),
+      costSettled: typeof row.costSettled === 'boolean' ? row.costSettled : null,
       bookDate: String(row.bookDate || ''), follower: String(row.follower || ''),
       customerName: String(row.customerName || ''), dimsKey: String(row.dimsKey || ''),
       matchedRevenue: String(row.matchedRevenue || ''), fingerprint: String(row.fingerprint || '')
@@ -1435,6 +1437,7 @@
     const demo = demoDatahub();
     const value = raw && typeof raw === 'object' ? raw : {};
     return {
+      ...demo, ...value,
       status: ['ok', 'failed', 'never'].includes(value.status) ? value.status : demo.status,
       lastSuccessAt: typeof value.lastSuccessAt === 'string' ? value.lastSuccessAt : demo.lastSuccessAt,
       lastAttemptAt: typeof value.lastAttemptAt === 'string' ? value.lastAttemptAt : demo.lastAttemptAt,
@@ -1588,7 +1591,8 @@
     // R16：AI 文档与能力子模型向后兼容；旧快照没有 aiDocs 时补演示数据。
     state.aiDocs = normalizeAiDocs(state.aiDocs);
     // R17：销售目标与 DataHub 收入成本子模型向后兼容；旧快照缺失时补演示数据。
-    state.goals = (Array.isArray(state.goals) ? state.goals : demoGoals()).map(normalizeGoal);
+    migrateFinance(state);
+    state.goals = (Array.isArray(state.goals) ? state.goals : demoGoals()).filter(goal => goal.metric === 'profit').map(normalizeGoal);
     state.datahub = normalizeDatahub(state.datahub);
     state.revenueRows = (Array.isArray(state.revenueRows) ? state.revenueRows : demoRevenueRows()).map(normalizeRevenueRow);
     state.costRows = (Array.isArray(state.costRows) ? state.costRows : demoCostRows()).map(normalizeCostRow);
@@ -1717,7 +1721,7 @@
       dailyReports: demoDailyReports(),
       dailyReportConfig: demoDailyReportConfig(),
       aiDocs: demoAiDocs(),
-      goals: demoGoals(),
+      financeVersion: 2, goals: demoGoals(),
       datahub: demoDatahub(),
       revenueRows: demoRevenueRows(),
       costRows: demoCostRows(),
@@ -4060,7 +4064,7 @@
 
   /* ---------- R17 销售目标与进度 ---------- */
 
-  F.goalMetricLabels = { revenue: '流水', profit: '毛利' };
+  F.goalMetricLabels = { profit: '毛利' };
   F.goalLevelLabels = { personal: '个人目标', all: '全员目标' };
   F.goalPhaseMeta = { not_started: ['尚未开始', 'brand'], active: ['进行中', 'green'], ended: ['已结束', 'neutral'] };
   F.datahubStatusMeta = { ok: ['取数正常', 'green'], failed: ['取数失败', 'red'], never: ['尚未接入', 'neutral'] };
@@ -4075,136 +4079,146 @@
     return F.role === 'MGR' && !!actor && actor.role === 'MGR' && actor.status === 'on';
   };
 
-  /** 有效收入行：缺收入结算时间的进异常清单不参与归集；同数据指纹的重复同步行只计第一次。 */
-  function effectiveRevenueRows(state) {
-    const seen = new Set();
-    return (state.revenueRows || []).filter(row => {
-      if (!row.settledAt) return false;
-      if (row.fingerprint && seen.has(row.fingerprint)) return false;
-      if (row.fingerprint) seen.add(row.fingerprint);
-      return true;
-    });
-  }
-
-  /** 有效成本行：配不上收入行的不进毛利（单独标注待核对）；同数据指纹去重。 */
-  function effectiveCostRows(state) {
-    const seen = new Set();
-    return (state.costRows || []).filter(row => {
-      if (!row.matchedRevenue) return false;
-      if (row.fingerprint && seen.has(row.fingerprint)) return false;
-      if (row.fingerprint) seen.add(row.fingerprint);
-      return true;
+  /** 同指纹或同来源行只计一次；缺结算时间的收入仍参与预计毛利。 */
+  function uniqueFinanceRows(rows) {
+    const seen = new Set(), ids = new Set();
+    return (rows || []).filter(row => {
+      if (ids.has(row.id) || (row.fingerprint && seen.has(row.fingerprint))) return false;
+      ids.add(row.id); if (row.fingerprint) seen.add(row.fingerprint); return true;
     });
   }
 
   /**
-   * 区间内达成：流水 = Σ 结算金额（不扣核减，核减口径待确认）；毛利 = Σ（结算金额 − 配对成本）。
-   * 成本随收入归集，不按成本自己的记账日期；salesId 为空串时按全员口径汇总。
+   * 对已核对关联计算一次业务毛利。缺收入、缺成本或绑定不一致一律待核对。
+   * 成本关系在原型中显式提供，正式配对规则留待业务与 DataHub 确认。
    */
-  function achievedInRange(state, salesId, start, end) {
-    const costs = effectiveCostRows(state);
-    const rows = effectiveRevenueRows(state).filter(row => {
-      const day = String(row.settledAt).slice(0, 10);
-      return day >= start && day <= end && (!salesId || row.salesId === salesId);
+  F.financeEntries = function (state = F.load()) {
+    const costs = uniqueFinanceRows(state.costRows), incomes = uniqueFinanceRows(state.revenueRows);
+    const entries = incomes.map(row => {
+      const matched = costs.filter(cost => cost.matchedRevenue === row.id);
+      const reasons = [];
+      const amount = F.financeNumber(row.receivableAmount);
+      if (amount === null) reasons.push('应收金额缺失');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.bookDate || '')) reasons.push('记账日期待核对');
+      if (!matched.length) reasons.push('成本未配对');
+      if (matched.some(cost => ['customerId', 'salesId', 'productType', 'company'].some(key => cost[key] !== row[key]) || String(cost.bookDate || '').slice(0, 7) !== String(row.bookDate || '').slice(0, 7))) reasons.push('收入与成本的归属或期间不一致');
+      const values = matched.map(cost => F.financeNumber(cost.costSettled === true ? cost.settlementCostAmount : cost.estimatedCostAmount));
+      if (values.some(value => value === null)) reasons.push('所需成本金额缺失');
+      if (matched.some(cost => typeof cost.costSettled !== 'boolean')) reasons.push('成本结算状态待核对');
+      const cost = matched.length && values.every(value => value !== null) ? values.reduce((a, b) => a + b, 0) : null;
+      const profit = reasons.length ? null : amount - cost;
+      const status = reasons.length ? 'pending' : row.settledAt && matched.every(cost => cost.costSettled === true) ? 'settled' : 'estimated';
+      return { ...row, receivableAmount: amount, cost, profit, status, reasons, costs: matched };
     });
-    const revenue = rows.reduce((sum, row) => sum + row.settledAmount, 0);
-    const profit = rows.reduce((sum, row) => sum + row.settledAmount - costs.filter(cost => cost.matchedRevenue === row.id).reduce((part, cost) => part + cost.costAmount, 0), 0);
-    return { revenue, profit, rows };
-  }
-
-  /** 目标区间相位：尚未开始 / 进行中 / 已结束（按演示当天 F.today 判定）。 */
-  function goalPhase(goal) {
-    return F.today < goal.start ? 'not_started' : F.today > goal.end ? 'ended' : 'active';
-  }
-
-  /** 同层级同销售同指标且区间相交的其他目标：允许保存，由列表提示重叠。 */
-  F.goalOverlaps = function (goal, state = F.load()) {
-    return (state.goals || []).filter(item => item.id !== goal.id && item.level === goal.level && item.metric === goal.metric
-      && (goal.level === 'all' || item.sales === goal.sales)
-      && item.start <= goal.end && goal.start <= item.end);
+    costs.filter(cost => !incomes.some(row => row.id === cost.matchedRevenue)).forEach(cost => entries.push({
+      ...cost, id: 'ORPHAN-' + cost.id, receivableAmount: null, cost: null, profit: null, status: 'pending',
+      settledAt: '', settledAmount: null, reasons: ['成本未找到对应收入'], costs: [cost]
+    }));
+    return entries;
   };
 
-  /**
-   * 单目标进度：达成按目标区间归集；目标为 0 时不做除法（progress/gap 为 null，由界面说明）；
-   * 超额时缺口取零、进度可超 100%；负毛利如实计入。
-   */
+  /** 金额聚合始终先按范围选择，同一业务只进入已结算或待结算预计中的一类。 */
+  function financeTotals(entries, turnover, available, source) {
+    const valid = entries.filter(row => row.status !== 'pending'), pending = entries.filter(row => row.status === 'pending');
+    const total = key => valid.reduce((sum, row) => sum + row[key], 0);
+    const countable = available && (valid.length > 0 || pending.length === 0);
+    const settledProfit = countable ? valid.filter(row => row.status === 'settled').reduce((sum, row) => sum + row.profit, 0) : null;
+    const estimatedProfit = countable ? valid.filter(row => row.status === 'estimated').reduce((sum, row) => sum + row.profit, 0) : null;
+    const turnoverKnown = turnover.filter(row => F.financeNumber(row.settledAmount) !== null);
+    return {
+      available, status: !available ? 'unavailable' : pending.length ? valid.length ? 'partial' : 'pending' : entries.length ? 'ready' : 'empty',
+      profit: countable ? total('profit') : null, settledProfit, estimatedProfit,
+      receivable: countable ? total('receivableAmount') : null, cost: countable ? total('cost') : null,
+      revenue: available && (!turnover.length || turnoverKnown.length) ? turnoverKnown.reduce((sum, row) => sum + F.financeNumber(row.settledAmount), 0) : null,
+      pendingCount: pending.length, validCount: valid.length, turnoverMissing: turnover.length - turnoverKnown.length,
+      rows: available ? entries : [], turnoverRows: available ? turnover : [], dataAsOf: source?.lastSuccessAt || '', stale: source?.status === 'failed'
+    };
+  }
+
+  /** 原型授权：销售仅本人，方案人员仅当前承接池客户，运营/超管全量。 */
+  function financeAllowed(row, query, state) {
+    const actor = F.actor && state.people.find(person => person.id === F.actor.id);
+    if (!actor || actor.role !== F.role || actor.status !== 'on') return false;
+    if (F.role === 'SLS' && row.salesId !== F.actor?.id) return false;
+    if (F.role === 'SOL' && !F.visible(state).some(space => space.customerId === row.customerId)) return false;
+    if (!['SLS', 'SOL', 'MGR', 'ADM'].includes(F.role)) return false;
+    return (!query.unattributed || !row.salesId) && (!query.salesId || row.salesId === query.salesId) && (!query.customerId || row.customerId === query.customerId)
+      && (!query.pool || state.spaces.some(space => space.customerId === row.customerId && space.pool === query.pool));
+  }
+
+  /** 同一范围分别按记账日期汇总毛利、按收入结算时间汇总流水。 */
+  F.financeRange = function (query = {}, state = F.load()) {
+    const range = query.month ? F.monthRange(query.month) : [query.start, query.end];
+    const [start, end] = range || [];
+    const months = state.datahub?.coveredMonths || [];
+    const requested = months.filter(month => month >= (start || '').slice(0, 7) && month <= (end || '').slice(0, 7));
+    const first = start?.slice(0, 7), last = end?.slice(0, 7);
+    const available = !!start && !!end && start <= end && state.datahub?.status !== 'never' && !!state.datahub?.lastSuccessAt
+      && months.includes(first) && months.includes(last) && requested.length === ((Number(last?.slice(0, 4)) - Number(first?.slice(0, 4))) * 12 + Number(last?.slice(5)) - Number(first?.slice(5)) + 1);
+    const permitted = row => financeAllowed(row, query, state);
+    const entries = F.financeEntries(state).filter(row => permitted(row) && row.bookDate >= start && row.bookDate <= end);
+    const turnover = uniqueFinanceRows(state.revenueRows).filter(row => permitted(row) && row.settledAt && row.settledAt.slice(0, 10) >= start && row.settledAt.slice(0, 10) <= end);
+    const result = financeTotals(entries, turnover, available, state.datahub);
+    return { ...result, month: query.month || '', start, end, source: state.datahub };
+  };
+
+  /** 未授权历史明细仅贡献本人总额，客户名称、产品及行明细不返回到该视图。 */
+  F.financeGroups = function (query = {}, state = F.load(), kind = 'customer') {
+    const result = F.financeRange(query, state), groups = new Map();
+    const keyOf = row => kind === 'product' ? row.productType || '产品类型待核对' : row.customerId || 'unmapped';
+    for (const row of [...result.rows, ...result.turnoverRows]) {
+      const key = keyOf(row);
+      if (!groups.has(key)) groups.set(key, row);
+    }
+    return [...groups].map(([key, first]) => {
+      const visibleSpaces = F.visible(state).filter(space => space.customerId === first.customerId && (!query.salesId || space.sales === query.salesId));
+      const readable = !!first.customerId && (F.role !== 'SLS' || visibleSpaces.some(space => space.sales === F.actor?.id && (space.lifecycle || space.state) !== 'frozen'));
+      const entries = result.rows.filter(row => keyOf(row) === key), turnover = result.turnoverRows.filter(row => keyOf(row) === key);
+      const totals = financeTotals(entries, turnover, result.available, state.datahub);
+      return { ...totals, key, customerId: first.customerId, label: readable ? kind === 'product' ? key : first.customerName : first.customerId ? '历史客户贡献（明细受限）' : '客户待对应（明细受限）',
+        readable, spaceId: readable ? visibleSpaces[0]?.id || '' : '', rows: readable ? totals.rows : [], turnoverRows: readable ? totals.turnoverRows : [] };
+    });
+  };
+
+  /** 客户空间锁定客户和空间销售；内容冻结不能自动恢复财务明细权限。 */
+  F.spaceFinance = function (spaceId, month = F.financeMonth(), state = F.load()) {
+    const space = F.space(spaceId, state);
+    if (!space || (F.role === 'SLS' && (space.lifecycle || space.state) === 'frozen')) return { status: 'forbidden', available: false, rows: [], month };
+    const query = { month, customerId: space.customerId, salesId: space.sales };
+    return { ...F.financeRange(query, state), space, products: F.financeGroups(query, state, 'product') };
+  };
+
+  function goalPhase(goal) { return F.financeToday() < goal.start ? 'not_started' : F.financeToday() > goal.end ? 'ended' : 'active'; }
+  F.goalOverlaps = (goal, state = F.load()) => state.goals.filter(item => item.id !== goal.id && item.level === goal.level && (goal.level === 'all' || item.sales === goal.sales) && item.start <= goal.end && goal.start <= item.end);
   F.goalProgress = function (goal, state = F.load()) {
-    const totals = achievedInRange(state, goal.level === 'personal' ? goal.sales : '', goal.start, goal.end);
-    const achieved = totals[goal.metric];
-    const target = Number(goal.value);
-    const zeroTarget = target === 0;
-    return {
-      target, achieved,
-      progress: zeroTarget ? null : achieved / target,
-      gap: zeroTarget ? null : Math.max(0, target - achieved),
-      phase: goalPhase(goal), zeroTarget,
-      dataAsOf: state.datahub?.lastSuccessAt || ''
-    };
+    const totals = F.financeRange({ salesId: goal.level === 'personal' ? goal.sales : '', start: goal.start, end: goal.end }, state);
+    const target = Number(goal.value), zeroTarget = target === 0, achieved = totals.profit;
+    return { ...totals, target, achieved, zeroTarget, phase: goalPhase(goal),
+      progress: zeroTarget || achieved === null ? null : achieved / target,
+      gap: zeroTarget || achieved === null ? null : Math.max(0, target - achieved) };
   };
-
-  /** 每个（层级, 指标, 销售）的当前目标：进行中优先，其次尚未开始，最后已结束；同相位取开始日最早的主区间。 */
-  F.currentGoal = function (state, level, metric, sales = '') {
-    const goals = (state.goals || []).filter(item => item.level === level && item.metric === metric && (level === 'all' || item.sales === sales));
-    if (!goals.length) return null;
+  F.currentGoal = function (state, level, metric = 'profit', sales = '') {
+    if (metric !== 'profit') return null;
     const rank = goal => goalPhase(goal) === 'active' ? 0 : goalPhase(goal) === 'not_started' ? 1 : 2;
-    return goals.slice().sort((a, b) => rank(a) - rank(b) || a.start.localeCompare(b.start) || b.end.localeCompare(a.end))[0];
+    return state.goals.filter(goal => goal.level === level && goal.metric === 'profit' && (level === 'all' || goal.sales === sales))
+      .sort((a, b) => rank(a) - rank(b) || b.start.localeCompare(a.start))[0] || null;
   };
-
-  /** 看板基准区间：当前全员流水目标的区间（缺失时回退全员毛利目标）；逐人「未设置」行的达成按该区间统计。 */
-  F.goalBoardRange = function (state = F.load()) {
-    const goal = F.currentGoal(state, 'all', 'revenue') || F.currentGoal(state, 'all', 'profit');
-    return goal ? [goal.start, goal.end] : null;
+  F.goalBoardRange = (state = F.load()) => {
+    const goal = F.currentGoal(state, 'all'); return goal ? [goal.start, goal.end] : F.monthRange(F.financeMonth());
   };
-
-  /**
-   * 运营看板：全员两指标、逐人进度、目标差异（全员 − 同区间个人之和，仅提示）与未归属业绩（全员 − Σ个人）。
-   * 两级独立计算、互不推导；逐人行同时带看板基准区间达成（revenueAchieved/profitAchieved），
-   * 供未设置指标时只输出达成、并保证「未归属 = 全员 − Σ个人」在同一区间口径下成立。
-   */
-  F.goalBoard = function (state = F.load()) {
-    const range = F.goalBoardRange(state);
-    const all = {};
-    const targetDiff = {};
-    for (const metric of ['revenue', 'profit']) {
-      const goal = F.currentGoal(state, 'all', metric);
-      all[metric] = goal ? { goal, ...F.goalProgress(goal, state) } : null;
-      // 目标差异只在同一区间口径下对比，避免重叠或其他区间的目标被重复累加。
-      targetDiff[metric] = goal ? goal.value - (state.goals || []).filter(item => item.level === 'personal' && item.metric === metric && item.start === goal.start && item.end === goal.end).reduce((sum, item) => sum + item.value, 0) : null;
-    }
-    const perSales = state.people.filter(person => person.role === 'SLS').map(person => {
-      const row = { sales: person.id, name: person.name, status: person.status };
-      for (const metric of ['revenue', 'profit']) {
-        const goal = F.currentGoal(state, 'personal', metric, person.id);
-        row[metric] = goal ? { goal, ...F.goalProgress(goal, state) } : null;
-        row[metric + 'Achieved'] = range ? achievedInRange(state, person.id, range[0], range[1])[metric] : 0;
-      }
-      return row;
-    });
-    const costs = effectiveCostRows(state);
-    const profitOf = row => row.settledAmount - costs.filter(cost => cost.matchedRevenue === row.id).reduce((sum, cost) => sum + cost.costAmount, 0);
-    const unattributedRows = range ? achievedInRange(state, '', range[0], range[1]).rows.filter(row => !row.salesId) : [];
-    return {
-      all, perSales, targetDiff,
-      unattributed: {
-        revenue: unattributedRows.reduce((sum, row) => sum + row.settledAmount, 0),
-        profit: unattributedRows.reduce((sum, row) => sum + profitOf(row), 0),
-        rows: unattributedRows.map(row => ({ ...row, cost: row.settledAmount - profitOf(row), profit: profitOf(row) }))
-      },
-      dataAsOf: state.datahub?.lastSuccessAt || '', datahub: state.datahub
-    };
-  };
-
-  /** 销售本人看板：未设指标为 null 只输出达成；两指标皆无目标且无达成时 hasAny 为 false，由界面给空态。 */
   F.myGoalBoard = function (salesId, state = F.load()) {
-    const range = F.goalBoardRange(state);
-    const board = { datahub: state.datahub, dataAsOf: state.datahub?.lastSuccessAt || '', hasAny: false };
-    for (const metric of ['revenue', 'profit']) {
-      const goal = F.currentGoal(state, 'personal', metric, salesId);
-      board[metric] = goal ? { goal, ...F.goalProgress(goal, state) } : null;
-      board[metric + 'Achieved'] = goal ? board[metric].achieved : (range ? achievedInRange(state, salesId, range[0], range[1])[metric] : 0);
-      if (goal || board[metric + 'Achieved']) board.hasAny = true;
-    }
-    return board;
+    const goal = F.currentGoal(state, 'personal', 'profit', salesId), totals = F.financeRange({ month: F.financeMonth(), salesId }, state);
+    return { ...totals, profitAchieved: totals.profit, revenueAchieved: totals.revenue,
+      profit: goal ? { goal, ...F.goalProgress(goal, state) } : null, hasAny: !!goal || !!totals.validCount, datahub: state.datahub };
+  };
+  F.goalBoard = function (state = F.load()) {
+    const goal = F.currentGoal(state, 'all'), [start, end] = F.goalBoardRange(state);
+    const totals = F.financeRange({ start, end }, state);
+    const perSales = state.people.filter(person => person.role === 'SLS').map(person => ({ sales: person.id, name: person.name, ...F.myGoalBoard(person.id, state) }));
+    const unattributedRows = totals.rows.filter(row => !row.salesId);
+    return { all: { profit: goal ? { goal, ...F.goalProgress(goal, state) } : null }, perSales,
+      targetDiff: { profit: goal ? goal.value - state.goals.filter(item => item.level === 'personal' && item.start === goal.start && item.end === goal.end).reduce((sum, item) => sum + item.value, 0) : null },
+      unattributed: financeTotals(unattributedRows, totals.turnoverRows.filter(row => !row.salesId), totals.available, state.datahub), dataAsOf: totals.dataAsOf, datahub: state.datahub };
   };
 
   /** 目标录入/调整共用校验：目标值必填、有限数字且 ≥ 0；区间必填且结束不早于开始；个人目标归属启用中销售。 */
@@ -4219,7 +4233,7 @@
     if (!start || !end) throw Error('请选择目标区间的开始日与结束日。');
     if (end < start) throw Error('结束日不得早于开始日。');
     if (!['personal', 'all'].includes(input.level)) throw Error('请选择目标层级。');
-    if (!['revenue', 'profit'].includes(input.metric)) throw Error('请选择流水或毛利指标。');
+    if (input.metric && input.metric !== 'profit') throw Error('本版只录入毛利目标。');
     if (input.level === 'personal') {
       const target = state.people.find(person => person.id === input.sales);
       if (!target || target.role !== 'SLS') throw Error('个人目标必须指定归属销售。');
@@ -4235,7 +4249,7 @@
     F.mutate('录入销售目标', state => {
       const value = assertGoalInput(state, input);
       created = {
-        id: F.uid('GT'), level: input.level, metric: input.metric,
+        id: F.uid('GT'), level: input.level, metric: 'profit',
         sales: input.level === 'personal' ? input.sales : '', value,
         start: String(input.start).trim(), end: String(input.end).trim(),
         createdBy: F.actor.id, createdAt: F.now(), adjustments: []

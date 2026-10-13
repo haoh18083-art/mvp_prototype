@@ -36,7 +36,7 @@ http://localhost:4173/mobile-ios-sales-assistant/
 | 过程 | 落点 |
 | --- | --- |
 | §4.1 四入口、本人助手入口、客户搜索 | 底栏四入口常驻；「今日」由欢迎区的「进入聊天助手」承接本人助手，客户 / 相关 / 我的由右下角悬浮入口承接，空间内改由空间助手承接；客户入口只搜本人有权空间 |
-| §4.2 空间详情与五 Tab | 顶部状态角标跨 Tab 常驻；默认落地概览；折叠区每次进入重新收起；深链跳客户 Tab 并高亮；冻结只读 |
+| §4.2 空间详情与六 Tab | 顶部状态角标跨 Tab 常驻；默认落地概览；折叠区每次进入重新收起；深链跳客户 Tab 并高亮；冻结只读 |
 | §4.3 跟进与周复盘写入 | 跟进记录必须关联商机；周复盘含进展 / 下一步 / 阻塞；提交后进入 R04 异步更新并同批产出行为记录 |
 | §4.4 方案接收、离线与并发 | 收件箱未读优先、每条只有一个动作；首次打开方案即已读；离线只读缓存 + 本机草稿；并发先提交为准 |
 | R10 录音状态口径（两端同源） | 转写由得到笔记完成，同步成功即带智能总结与原文；本系统不设转写阶段，录音区不显示任何转写标记，归位后只表达客户信息更新情况（更新中 / 已完成 / 更新未完成）；「今日该跟」的判断依据只给出处与时间。共享模型已收口：`waiting_transcript` 不再是有效归位状态，旧快照里的该值加载时迁移为 `updating`（依据 M05-2 §边界与 §4.3） |
@@ -57,13 +57,13 @@ http://localhost:4173/mobile-ios-sales-assistant/
   | `.t-warn` | 警示文字 | 12 / 500 / danger |
   | `.t-eyebrow` | mono 小标签（eyebrow、底栏文字、「判断依据」等） | mono 10 |
   | `.t-count` | mono 计数与时间 | mono 11 · tabular |
-  | `.t-figure` | 本周经营数值 | mono 24（`.is-text` 时正文字体 20） |
+  | `.t-figure` | 本月经营数值 | mono 24（`.is-text` 时正文字体 20） |
 
 - **组件类唯一**：空态 `.empty-state`、说明 `.notice`（配 `.t-meta` 灰底 / `.t-warn` 红底）、状态角标 `.state-chip`、来源 `.source-chip`、内容卡 `.card`、按钮 `.btn`。
 - **列表行**（`css/components/list.css`）：`.list > .list-row`，左右 16px、行高 ≥56px、行间 1px 发丝线、无卡片边框、无头像；行头 `.list-row-head > .list-main + [.list-aside] + .row-chevron`，可展开行用 `.list-row-detail`。客户列表、今天该跟、收件箱、各类记录（录音 / 草稿 / 跟进 / 行为 / 方案 / 归位 / 资料）全部套用。
 - **今天该跟条目**（`css/components/follow-card.css`）：行头只放客户、状态种类、客户池、生效中的标记角标（星标 / 暂不跟进）与「一句话说明」（状态判断的结论）；「下一步」（动作建议）、「判断依据」、标记入口收进 `.list-row-detail` 展开区，两组各带 `.t-eyebrow` 小标题、组间距比组内大一段。收起只认行头（`[data-follow-toggle]`，同步 `aria-expanded`），行尾 chevron 进客户空间，展开区点依据不会把卡片收回去。
 - **标记入口**（词表同 R13 §4.2）：展开区右下角 `.follow-marks` 两个小按钮——「星标 / 取消星标」一键开或关，「暂不跟进」走底部表单（原因必填、结束日选填、已有标记时带出原值并提供「取消暂不跟进」）。标记只写入次日输入，当天名单不变。
-- **Tab**（`css/components/tabs.css`）：只有下划线 segmented 一种——`.seg-tabs > .seg-tabs-track > .seg-tab[.is-active]`，激活态 2px accent 指示条 + 650 字重，可横滚两端渐隐，激活项自动居中，计数 `.seg-count`（mono）。空间五 Tab、跟进子 Tab、收件箱共用，由 `segTabs()` 生成。
+- **Tab**（`css/components/tabs.css`）：只有下划线 segmented 一种——`.seg-tabs > .seg-tabs-track > .seg-tab[.is-active]`，激活态 2px accent 指示条 + 650 字重，可横滚两端渐隐，激活项自动居中，计数 `.seg-count`（mono）。空间六 Tab、跟进子 Tab、收件箱共用，由 `segTabs()` 生成。
 - **图标**（`js/components/icons.js`）：唯一注册表，`icon(name, className)` 输出 24×24 / currentColor / 1.8 描边 / round cap-join 的 SVG；尺寸由 `css/components/icon.css` 的 `.ic-xs/sm/lg/xl` 控制。底栏四入口、悬浮入口、返回、chevron、状态图标全部走注册表，页面里不再手写 SVG 或用 emoji。当前注册：`today customers related profile assistant arrow-right chevron-right chevron-down chevron-left check close star search refresh bell stop`。
 - **文案**：界面只保留用户完成下一步所需的信息（空态一句话引导、冻结只读、离线草稿、推送未送达）；不写向评审解释系统逻辑的说明。
 - **底部抽屉**（`css/components/app-views.css` 的 `.rec-sheet*`）：全站只有一套自底向上弹层外壳——占手机框高度 80%（4/5 屏），打开向上滑入 `rec-sheet-in`、关闭向下滑出 `rec-sheet-out`（加 `.is-closing`，动画结束或 360ms 兜底后移除节点）。标题区 `.rec-sheet-head`（标题 + 可选说明 + 关闭按钮）、内容区 `.rec-sheet-body` 是唯一滚动容器。录音内容 / 本次变化 / 空间更新 / 查看原文 / 各类表单（写跟进、暂不跟进、回复方案、归位录音）全部走它；表单内部类 `.sheet-form`、`.sheet-field`、`.sheet-pre` 与关闭按钮 `.sheet-close` 保留原名。后开的抽屉叠在上面（同 z-index，按 DOM 顺序），换页时 `render()` 收起所有抽屉与叠层。
@@ -87,8 +87,8 @@ http://localhost:4173/mobile-ios-sales-assistant/
 - `js/components/store-bridge.js`：桌面模型桥接、设备本地状态（离线 / 缓存 / 草稿）。
 - `js/components/welcome.js`：欢迎区打字机、眨眼图标的可视区域观察（导入时的原有动效，逐字保留）。
 - `js/components/icons.js`：图标注册表 `icon()` 与列表行 chevron `rowChevron()`。
-- `js/components/views-main.js`：今日（欢迎区 / 本周经营 / 今天该跟 / 收件箱）/ 客户 / 相关 / 我的四个主入口，以及「相关」的录音管理二级页（`#/related/recordings`：未处理 / 已处理、卡片、安静归位标记、智能总结 / 原文转录抽屉）；`sectionHead()`、`segTabs()`、`emptyState()` 公共片段。
-- `js/components/views-space.js`：客户空间五个 Tab 与写入表单；`card()`、`recordRow()`、`kvList()` 公共片段。
+- `js/components/views-main.js`：今日（欢迎区 / 本月经营 / 今天该跟 / 收件箱）/ 客户 / 相关 / 我的四个主入口，以及「相关」的录音管理二级页（`#/related/recordings`：未处理 / 已处理、卡片、安静归位标记、智能总结 / 原文转录抽屉）；`sectionHead()`、`segTabs()`、`emptyState()` 公共片段。
+- `js/components/views-space.js`：客户空间六个 Tab 与写入表单；`card()`、`recordRow()`、`kvList()` 公共片段。
 - `js/components/assistant.js`：本人助手覆盖层动画。
 - `js/components/app-shell.js`：路由、底栏、弹层、事件绑定、Tab 居中、路由转场（方向判定、旧页快照、收尾）。
 - `css/shared.css`：页面实际加载的合并样式。**改动请先改源文件，再按下列顺序拼回**：
@@ -117,4 +117,8 @@ node tests/mobile.cjs        # 在 原型/ 目录下执行
 node tests/mobile-chat.cjs
 ```
 
-`tests/mobile.cjs` 覆盖四入口、客户搜索、五 Tab、写入、离线草稿、并发，以及路由转场契约：推入 / 弹出的方向与垫层内容、动画结束后的收尾、主入口之间不转场，以及无动画能力环境下的同步切换。
+`tests/mobile.cjs` 覆盖四入口、客户搜索、六 Tab、写入、离线草稿、并发，以及路由转场契约：推入 / 弹出的方向与垫层内容、动画结束后的收尾、主入口之间不转场，以及无动画能力环境下的同步切换。
+
+### R17 月度毛利（2026-10-12）
+
+空间概览新增当月预计毛利、已结算与待结算预计构成、流水总数；第六个「历史毛利」Tab 可独立选月并按原始产品类型展开。空间始终绑定当前客户与归属销售，不设置客户目标。今日经营显示本人本月金额及毛利目标进度；同步失败保留上次成功值并标注截止时间，从未成功取数显示「—」。计算与桌面端共用 `js/features/store.js`，展示共用 `js/features/profit.js` 和 `css/profit.css`，均为演示数据。

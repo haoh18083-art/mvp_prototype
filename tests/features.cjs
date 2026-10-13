@@ -94,8 +94,8 @@ test('feature pages load the responsive table styles and current feature script 
 
     assert.ok(styles.includes('../css/features.css?v=20260922-r07-dispatch'), `${page}: 缺少功能页基础样式`);
     assert.ok(styles.includes('../css/features-container.css?v=20260920-people-r2'), `${page}: 缺少表格容器响应样式`);
-    assert.equal(featureScripts.length, 11, `${page}: 功能脚本数量`);
-    assert.ok(featureScripts.every(src => src.endsWith('?v=20260922-r07-dispatch') || src.endsWith('?v=20260921-r1900-insight-ops') || (page === 'insight-ops' && src === '../js/features/insights.js?v=20260922-workbench')), `${page}: 功能脚本缓存版本未同步`);
+    assert.equal(featureScripts.length, 12, `${page}: 功能脚本数量`);
+    assert.ok(featureScripts.every(src => src.endsWith('?v=20261012-gross-profit') || src.endsWith('?v=20260922-r07-dispatch') || src.endsWith('?v=20260921-r1900-insight-ops') || (page === 'insight-ops' && src === '../js/features/insights.js?v=20260922-workbench')), `${page}: 功能脚本缓存版本未同步`);
   }
 });
 
@@ -944,8 +944,8 @@ test('R04 概览为默认入口，本次变化、依据溯源与冻结问答约�
   const t = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-201');
   let saved;
   try {
-    // 4.1 五入口固定，概览默认；十个板块齐全
-    assert.deepEqual([...t.doc.querySelectorAll('[data-tab]')].map(node => node.dataset.tab), ['overview', 'customer', 'opps', 'followup', 'documents']);
+    // 4.1 六入口固定，概览默认；十个板块齐全
+    assert.deepEqual([...t.doc.querySelectorAll('[data-tab]')].map(node => node.dataset.tab), ['overview', 'customer', 'opps', 'followup', 'documents', 'profit']);
     assert.equal(t.doc.querySelector('[data-tab="overview"]').classList.contains('is-active'), true, '概览是默认入口');
     assert.equal(t.doc.querySelectorAll('[data-overview-panel]').length, 10, '概览应有十个板块');
     assert.ok(t.doc.querySelector('[data-overview-panel="who"] .fp-source-chip'), '结论应带依据入口');
@@ -2425,312 +2425,186 @@ test('R16 AI 文档与能力可运营化：接管、分权填写、skill 三态�
   } finally { menu.close(); }
 });
 
-test('R17 销售目标与进度：角色可见、录入校验、调整留痕、达成口径与 DataHub 状态闭环', () => {
-  /** 读取单元格正文（去掉窄屏字段标签），避免表头文字干扰内容断言。 */
-  const cellText = (row, index) => {
-    const cell = row.cells[index].cloneNode(true);
-    cell.querySelector('.fp-table-cell-label')?.remove();
-    return cell.textContent.trim();
-  };
-
-  // 三角色可见性：SLS 只见本人两卡不渲染页签；SOL 无权访问；MGR 全量三页签
-  const sls = load('sales-goals', '?role=SLS&as=U-1004');
+test('R17 应收减成本：销售归属、预计/已结算、缺失与明确零、原始产品类型', () => {
+  const t = load('sales-goals', '?role=MGR&as=U-1002');
   try {
-    const text = sls.doc.querySelector('#fp-content').textContent;
-    assert.match(text, /我的目标/);
-    assert.match(text, /付赞/);
-    assert.equal(text.includes('张云飞'), false, '销售只见本人目标与达成');
-    assert.equal(sls.doc.querySelector('#fp-content [data-tab]'), null, '销售视图不渲染页签');
-    assert.match(text, /数据截止 2026-09-15 06:30/);
-    // 本人流水卡：目标 200 万、达成 175 万、进度 87.5%、缺口 25 万；毛利卡超额缺口取零
-    assert.match(text, /200 万/);
-    assert.match(text, /175 万/);
-    assert.match(text, /87\.5%/);
-    assert.match(text, /25 万/);
-    assert.match(text, /116\.7%/);
-    assert.equal(sls.F.canManageGoals(), false, '销售无目标写权限');
-    assert.throws(() => sls.F.saveGoal({ level: 'personal', metric: 'revenue', sales: 'U-1004', value: '100', start: '2026-09-01', end: '2026-09-30' }), /仅销售运营/);
-    assert.throws(() => sls.F.runDatahubSync('fail'), /仅销售运营或超级管理员/);
-    assert.deepEqual(sls.errors, []);
-  } finally { sls.close(); }
+    const state = t.F.load(), month = t.F.financeMonth();
+    const result = t.F.financeRange({ month, customerId: 'C-1001', salesId: 'U-1004' }, state);
+    assert.equal(result.profit, 67500, '12万应收-8万结算成本 + 6万应收-3.8万预计成本 + 1.8万应收-1.25万预计成本');
+    assert.equal(result.settledProfit, 40000);
+    assert.equal(result.estimatedProfit, 27500);
+    assert.equal(result.revenue, 198000, '包含其他记账月份于本月结算的4.5万流水');
+    assert.equal(result.pendingCount, 2, '缺成本和缺应收都不补零');
+    assert.equal(result.rows.find(row => row.id === 'RV-13').profit, 0, '明确零收入及零成本可计算');
+    assert.equal(result.rows.find(row => row.id === 'RV-4').profit, null);
+    assert.equal(result.rows.find(row => row.id === 'RV-14').profit, null);
+    const other = t.F.financeRange({ month, customerId: 'C-1001', salesId: 'U-1005' }, state);
+    assert.equal(other.profit, 30000, '同客户其他销售单独核算');
+    assert.ok(t.F.financeGroups({ month, customerId: 'C-1001', salesId: 'U-1004' }, state, 'product').some(row => row.label === '按次-其他-1010号码-低消'));
+    const changed = JSON.parse(JSON.stringify(state));
+    changed.revenueRows.forEach(row => { row.follower = '与销售不同的跟进人'; row.dataStage = '任意阶段'; });
+    assert.equal(t.F.financeRange({ month, salesId: 'U-1004' }, changed).profit, 87500);
+    const negative = t.F.financeRange({ month, salesId: 'U-1008' }, state);
+    assert.equal(negative.profit, -8000, '负毛利不截为零');
+    state.revenueRows.push({ ...state.revenueRows[0], id: 'duplicate' });
+    state.costRows.push({ ...state.costRows[0], id: 'duplicate-cost' });
+    assert.equal(t.F.financeRange({ month, salesId: 'U-1004' }, state).profit, 87500, '重复同步行不能重复计算');
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
+});
+
+test('R17 结算只改变原记账月，成本状态决定取值且单边结算仍为预计', () => {
+  const t = load('sales-goals', '?role=MGR&as=U-1002');
+  try {
+    const state = t.F.load(), month = t.F.financeMonth(), prev = t.F.financeMonth(-1);
+    const income = state.revenueRows.find(row => row.id === 'RV-2'), cost = state.costRows.find(row => row.matchedRevenue === income.id);
+    income.bookDate = prev + '-04'; cost.bookDate = prev + '-04';
+    const before = t.F.financeRange({ month: prev, salesId: 'U-1004' }, state);
+    income.settledAt = month + '-08'; income.settledAmount = 59000;
+    assert.equal(t.F.financeEntries(state).find(row => row.id === income.id).status, 'estimated', '收入结算而成本未结算仍预计');
+    assert.equal(t.F.financeRange({ month: prev, salesId: 'U-1004' }, state).profit, before.profit);
+    cost.costSettled = true; cost.settlementCostAmount = 40000;
+    const after = t.F.financeRange({ month: prev, salesId: 'U-1004' }, state);
+    assert.equal(after.profit, before.profit - 2000, '调整结算成本后重算原记账月');
+    assert.equal(after.estimatedProfit, 0);
+    assert.equal(t.F.financeRange({ month, salesId: 'U-1004' }, state).profit, 65500, '本月不吸收历史毛利');
+    cost.settlementCostAmount = null;
+    assert.equal(t.F.financeEntries(state).find(row => row.id === income.id).status, 'pending', '已结算成本缺失不能回退到预计值');
+    cost.settlementCostAmount = 40000; cost.salesId = 'U-1005';
+    assert.equal(t.F.financeEntries(state).find(row => row.id === income.id).profit, null, '配对存在归属冲突不做毛利');
+  } finally { t.close(); }
+});
+
+test('R17 毛利目标直接录入、预计达成可超额、零目标不除法并保留调整记录', () => {
+  const t = load('sales-goals', '?role=MGR&as=U-1002&tab=manage');
+  try {
+    const range = t.F.monthRange(t.F.financeMonth());
+    assert.ok(t.F.load().goals.every(goal => goal.metric === 'profit'));
+    click(t, '[data-action="goal-new"]');
+    assert.equal(t.doc.querySelector('[name="metric"]'), null, '不提供流水/毛利选择');
+    fill(t, 'value', '50000'); fill(t, 'sales', 'U-1004'); submit(t);
+    const goal = t.F.load().goals.find(item => item.id.startsWith('GT-') && item.value === 50000 && item.sales === 'U-1004');
+    const progress = t.F.goalProgress(goal);
+    assert.equal(progress.achieved, 87500); assert.equal(progress.progress, 1.75); assert.equal(progress.gap, 0);
+    t.F.adjustGoal(goal.id, { value: '90000', start: range[0], end: range[1], reason: '调整本月毛利目标' });
+    const adjusted = t.F.load().goals.find(item => item.id === goal.id);
+    assert.equal(adjusted.adjustments.length, 1); assert.equal(adjusted.adjustments[0].before.value, 50000);
+    assert.equal(t.F.goalProgress(adjusted).gap, 2500);
+    assert.throws(() => t.F.saveGoal({ level: 'all', metric: 'revenue', value: '100', start: range[0], end: range[1] }), /只录入毛利/);
+    assert.throws(() => t.F.saveGoal({ level: 'all', value: '', start: range[0], end: range[1] }), /填写目标/);
+    assert.equal(t.F.goalProgress(t.F.load().goals.find(item => item.id === 'GT-7')).progress, null);
+    assert.equal(t.F.myGoalBoard('U-1006').profit, null, '未录目标不伪造零目标');
+    assert.equal(/流水目标|流水进度|流水缺口/.test(t.doc.querySelector('#fp-content').textContent), false);
+  } finally { t.close(); }
+  const admin = load('sales-goals', '?role=ADM&as=U-1001&tab=manage');
+  try {
+    assert.equal(admin.doc.querySelector('[data-action="goal-new"]'), null);
+    assert.equal(admin.doc.querySelector('[data-action="goal-adjust"]'), null);
+    assert.ok(admin.doc.querySelector('[data-action="goal-history"]'));
+    assert.throws(() => admin.F.saveGoal({}), /仅销售运营/);
+  } finally { admin.close(); }
+});
+
+test('R17 来源不可用、全部待核对、无业务与失败保留数据明确区分', () => {
+  const t = load('sales-goals', '?role=MGR&as=U-1002&tab=datahub');
+  try {
+    const state = t.F.load(), month = t.F.financeMonth();
+    state.costRows = []; const pending = t.F.financeRange({ month }, state);
+    assert.equal(pending.status, 'pending'); assert.equal(pending.profit, null);
+    assert.ok(pending.revenue > 0, '毛利待核对不丢失已有流水总数');
+    state.revenueRows = []; const empty = t.F.financeRange({ month }, state);
+    assert.equal(empty.status, 'empty'); assert.equal(empty.profit, 0);
+    assert.equal(t.F.financeRange({ month: '2001-01' }, state).profit, null);
+    const original = t.F.financeRange({ month }).profit;
+    t.F.runDatahubSync('fail');
+    assert.equal(t.F.financeRange({ month }).profit, original); assert.equal(t.F.financeRange({ month }).stale, true);
+    t.F.resetDatahub(); assert.equal(t.F.financeRange({ month }).profit, null);
+    t.F.runDatahubSync('fail'); assert.equal(t.F.financeRange({ month }).profit, null, '从未成功的失败状态不能显示样例金额');
+    t.F.runDatahubSync('ok'); assert.equal(t.F.financeRange({ month }).profit, original);
+    assert.ok(assertFeatureTable(t.doc.querySelector('[data-datahub-whitelist]'), 'DataHub 取数白名单', 'R17/字段') > 0);
+    assert.ok(assertFeatureTable(t.doc.querySelector('[data-datahub-errors]'), 'DataHub 取数异常清单', 'R17/待核对') > 0);
+  } finally { t.close(); }
+});
+
+test('R17 角色范围：销售仅本人，方案仅当前承接客户，历史明细不自动恢复', () => {
+  const t = load('sales-goals', '?role=SLS&as=U-1004');
+  try {
+    const state = t.F.load(), month = t.F.financeMonth();
+    assert.equal(t.F.financeRange({ month }, state).profit, 87500);
+    assert.equal(t.F.financeRange({ month, salesId: 'U-1005' }, state).rows.length, 0);
+    assert.equal(t.F.spaceFinance(state.spaces.find(space => space.sales !== t.F.actor.id).id, month, state).status, 'forbidden');
+    const bound = state.spaces.find(space => space.id === 'WS-201'); bound.lifecycle = 'frozen'; bound.state = 'frozen';
+    assert.equal(t.F.spaceFinance(bound.id, month, state).status, 'forbidden');
+    assert.equal(t.F.financeRange({ month }, state).profit, 87500, '冻结不抹去本人业绩');
+    const group = t.F.financeGroups({ month }, state).find(item => item.customerId === bound.customerId);
+    assert.equal(group.readable, false); assert.equal(group.rows.length, 0);
+    assert.equal(group.label.includes(bound.customer), false, '移交/冻结详情未确认时不暴露实名');
+    assert.equal(t.doc.querySelector('[data-tab="manage"]'), null);
+  } finally { t.close(); }
   const sol = load('sales-goals', '?role=SOL&as=U-1010');
   try {
-    assert.match(sol.doc.body.textContent, /无权访问/);
-    assert.equal(sol.doc.querySelector('[data-goal-card]'), null, '无权角色不返回目标数据');
+    const state = sol.F.load(), month = sol.F.financeMonth();
+    const allowed = new Set(sol.F.visible(state).map(space => space.customerId));
+    assert.ok(sol.F.financeRange({ month }, state).rows.every(row => allowed.has(row.customerId)));
+    state.assignments[sol.F.actor.id] = [];
+    assert.equal(sol.F.financeRange({ month }, state).rows.length, 0);
+    assert.equal(sol.doc.querySelector('[data-tab="board"]'), null);
   } finally { sol.close(); }
+});
 
-  // 运营进度看板：全员数字、目标差异提示、逐人表（可搜索可排序）、未归属业绩表
-  const mgr = load('sales-goals', '?role=MGR&as=U-1002');
+test('R17 运营客户下钻先按销售绑定展示，未对应客户与停用账号不得扩张明细', () => {
+  const t = load('sales-goals', '?role=MGR&as=U-1002');
   try {
-    assert.equal(mgr.F.canManageGoals(), true, '销售运营可写目标');
-    assert.deepEqual([...mgr.doc.querySelectorAll('[data-tab]')].map(n => n.dataset.tab), ['board', 'manage', 'datahub'], '运营三页签');
-    const boardText = mgr.doc.querySelector('#fp-content').textContent;
-    assert.match(boardText, /309 万/, '全员流水达成含未归属与负毛利行');
-    assert.match(boardText, /117 万/, '全员毛利达成');
-    assert.match(boardText, /24 万/, '未归属业绩');
-    const diff = mgr.doc.querySelector('[data-goal-diff]');
-    assert.ok(diff, '目标差异提示存在');
-    assert.match(diff.textContent, /280 万/, '流水差异 = 600 − (200+120)');
-    assert.match(diff.textContent, /120 万/, '毛利差异 = 180 − (60+0)');
-    assert.match(diff.textContent, /仅提示/);
-    assert.ok(assertFeatureTable(mgr.doc.querySelector('[data-goal-board]'), '全员逐人目标进度', 'R17/逐人进度') > 0);
-    // 无目标销售（U-1006）：未设置 + 只输出达成，不输出进度与缺口
-    const row1006 = mgr.doc.querySelector('[data-goal-sales="U-1006"]');
-    assert.equal(cellText(row1006, 1), '未设置');
-    assert.equal(cellText(row1006, 2), '30 万', '无目标销售仍输出达成');
-    assert.equal(cellText(row1006, 3), '—', '未设置不输出进度');
-    assert.equal(cellText(row1006, 4), '—', '未设置不输出缺口');
-    // 零目标（U-1008）：明确设零、不计算进度、负毛利红字如实展示
-    const row1008 = mgr.doc.querySelector('[data-goal-sales="U-1008"]');
-    assert.match(cellText(row1008, 5), /明确设零/);
-    assert.equal(cellText(row1008, 6), '-6 万', '负毛利原样展示');
-    assert.equal(cellText(row1008, 7), '不计算进度');
-    assert.ok(row1008.querySelector('span[style*="red"]'), '负毛利红字标注');
-    // 未开始（U-1013）与已结束（U-1014）区间标注
-    assert.match(mgr.doc.querySelector('[data-goal-sales="U-1013"]').textContent, /尚未开始/);
-    const row1014 = mgr.doc.querySelector('[data-goal-sales="U-1014"]');
-    assert.match(row1014.textContent, /已结束/);
-    assert.match(row1014.textContent, /125\.0%/, '已结束区间进度定格');
-    // 搜索与排序
-    fill(mgr, 'q', '张云飞'); submit(mgr, '[data-search]');
-    assert.equal(mgr.doc.querySelectorAll('[data-goal-sales]').length, 1, '逐人表可搜索');
-    click(mgr, '[type=reset]');
-    assert.equal(mgr.doc.querySelectorAll('[data-goal-sales]').length, 8, '清除后恢复全量销售');
-    change(mgr, 'sort', 'profit-desc');
-    assert.equal(mgr.doc.querySelector('[data-goal-sales]').dataset.goalSales, 'U-1004', '按毛利进度从高到低排序');
-    // 未归属业绩表：金额 + 原因
-    assert.ok(assertFeatureTable(mgr.doc.querySelector('[data-goal-unattributed]'), '未归属业绩清单', 'R17/未归属') > 0);
-    const unText = mgr.doc.querySelector('[data-goal-unattributed]').textContent;
-    assert.match(unText, /跟进人为空/);
-    assert.match(unText, /跟进人无法对应本地账号/);
-    assert.match(unText, /赵伟航/);
+    const customer = t.doc.querySelector('[data-profit-customer="C-1001"]');
+    assert.ok(customer.querySelector('[data-profit-binding="U-1004"]').textContent.includes('67,500.00'));
+    assert.ok(customer.querySelector('[data-profit-binding="U-1005"]').textContent.includes('30,000.00'));
+    assert.equal(customer.querySelector('[data-profit-binding="U-1004"] [data-profit-entry="RV-5"]'), null);
+    const state = t.F.load(), month = t.F.financeMonth();
+    const source = state.revenueRows.find(row => row.id === 'RV-1');
+    source.customerId = '';
+    const unmapped = t.F.financeGroups({ month }, state).find(group => group.key === 'unmapped');
+    assert.equal(unmapped.readable, false); assert.equal(unmapped.rows.length, 0);
+    state.people.find(person => person.id === t.F.actor.id).status = 'off';
+    assert.equal(t.F.financeRange({ month }, state).rows.length, 0);
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
+});
 
-    // 目标管理：列表含重叠 badge，调整记录抽屉留痕可读
-    click(mgr, '[data-tab="manage"]');
-    assert.ok(assertFeatureTable(mgr.doc.querySelector('[data-goal-list]'), '销售目标列表', 'R17/目标列表') > 0);
-    assert.match(mgr.doc.querySelector('[data-goal-row="GT-3"]').textContent, /区间重叠/, '主区间与 GT-5 重叠标注');
-    assert.match(mgr.doc.querySelector('[data-goal-row="GT-5"]').textContent, /区间重叠/);
-    click(mgr, '[data-goal-row="GT-4"] [data-action="goal-history"]');
-    const history = mgr.doc.querySelector('[data-goal-history]');
-    assert.ok(history, '调整记录抽屉打开');
-    assert.match(history.textContent, /50 万 → 60 万/, '调整前后值留痕');
-    assert.match(history.textContent, /王云生/);
-    assert.match(history.textContent, /2026-09-08 10:20/);
-    assert.match(history.textContent, /上调/, '调整原因留痕');
-    mgr.doc.querySelector('.fp-overlay [data-close]').click();
+test('R17 客户空间当月卡片、历史切月及产品下钻与月度总览一致', () => {
+  const t = load('followup-workbench', '?role=SLS&as=U-1004&space=WS-201');
+  try {
+    assert.equal(t.doc.querySelector('[data-profit-total]').textContent, '67,500.00');
+    assert.equal(t.doc.querySelector('[data-finance-month]').dataset.financeMonth, t.F.financeMonth());
+    click(t, '[data-tab="profit"]');
+    assert.equal(t.doc.querySelector('[data-profit-month]').value, t.F.financeMonth(-1));
+    assert.equal(t.doc.querySelector('[data-profit-total]').textContent, '45,000.00');
+    const field = t.doc.querySelector('[data-profit-month]'); field.value = t.F.financeMonth(-2); field.dispatchEvent(new t.w.Event('change'));
+    assert.equal(t.doc.querySelector('[data-profit-total]').textContent, '5,000.00');
+    assert.ok(t.doc.querySelector('[data-profit-product="按次-其他-1010号码-低消"]'));
+    click(t, '[data-tab="overview"]'); assert.equal(t.doc.querySelector('[data-profit-total]').textContent, '67,500.00');
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
+});
 
-    // 录入校验：空值 / 负数 / 区间倒置阻止保存；停用销售不在归属选项
-    click(mgr, '[data-action="goal-new"]');
-    assert.equal(mgr.doc.querySelector('.fp-overlay [name=sales] option[value="U-1007"]'), null, '停用销售不出现在归属销售选项');
-    submit(mgr);
-    assert.match(mgr.doc.querySelector('.fp-overlay .fp-error').textContent, /目标值/);
-    fill(mgr, 'value', '-100'); submit(mgr);
-    assert.match(mgr.doc.querySelector('.fp-overlay .fp-error').textContent, /负数/);
-    fill(mgr, 'value', '660000'); fill(mgr, 'start', '2026-09-10'); fill(mgr, 'end', '2026-09-01'); submit(mgr);
-    assert.match(mgr.doc.querySelector('.fp-overlay .fp-error').textContent, /结束日不得早于开始日/);
-    const before = mgr.F.load().goals.length;
-    fill(mgr, 'end', '2026-09-30'); submit(mgr);
-    const goals = mgr.F.load().goals;
-    assert.equal(goals.length, before + 1, '校验通过后写库');
-    const created = goals.find(g => g.value === 660000);
-    assert.ok(created && created.sales === 'U-1004' && created.createdBy === 'U-1002' && created.adjustments.length === 0, '新目标带录入人且无调整记录');
-
-    // 调整留痕：before/after/reason/actor 齐全，历史不被覆盖，进度按新值算
-    mgr.F.adjustGoal(created.id, { value: '700000', start: '2026-09-10', end: '2026-09-30', reason: '客户预算确认后上调' });
-    const adjusted = mgr.F.load().goals.find(g => g.id === created.id);
-    assert.equal(adjusted.value, 700000);
-    assert.equal(adjusted.adjustments.length, 1);
-    assert.equal(adjusted.adjustments[0].before.value, 660000);
-    assert.equal(adjusted.adjustments[0].after.value, 700000);
-    assert.equal(adjusted.adjustments[0].reason, '客户预算确认后上调');
-    assert.equal(adjusted.adjustments[0].actor, 'U-1002');
-    mgr.F.adjustGoal(created.id, { value: '580000', start: '2026-09-10', end: '2026-09-30', reason: '二次校准' });
-    assert.equal(mgr.F.load().goals.find(g => g.id === created.id).adjustments.length, 2, '每次调整都留痕，历史不被覆盖');
-    const adjustedProgress = mgr.F.goalProgress(mgr.F.load().goals.find(g => g.id === created.id), mgr.F.load());
-    assert.equal(adjustedProgress.target, 580000, '进度按新值算');
-    assert.equal(adjustedProgress.achieved, 950000, '区间 09-10 ~ 09-30 内该销售流水 95 万（重复指纹只计一次）');
-    assert.equal(adjustedProgress.gap, 0, '超额缺口取零');
-    assert.ok(adjustedProgress.progress > 1, '超额进度可超 100%');
-    assert.throws(() => mgr.F.adjustGoal(created.id, { value: '1', start: '2026-09-10', end: '2026-09-30', reason: ' ' }), /调整原因/);
-    assert.deepEqual(mgr.errors, []);
-  } finally { mgr.close(); }
-
-  // 超管只读：无录入/调整入口，模型层同样拒绝
-  const adm = load('sales-goals', '?role=ADM&as=U-1001');
+test('R17 本地旧财务样例升级保留原始快照、毛利目标调整及其他模块编辑', () => {
+  const t = load('sales-goals', '?role=MGR&as=U-1002');
+  let saved;
   try {
-    click(adm, '[data-tab="manage"]');
-    assert.equal(adm.doc.querySelector('[data-action="goal-new"]'), null, '超管无录入入口');
-    assert.equal(adm.doc.querySelector('[data-action="goal-adjust"]'), null, '超管无调整入口');
-    assert.ok(adm.doc.querySelector('[data-action="goal-history"]'), '超管可查看调整记录');
-    assert.match(adm.doc.querySelector('#fp-content').textContent, /销售运营负责/, '界面标注固化口径');
-    assert.equal(adm.F.canManageGoals(), false);
-    assert.throws(() => adm.F.saveGoal({ level: 'all', metric: 'revenue', value: '100', start: '2026-09-01', end: '2026-09-30' }), /仅销售运营/);
-    assert.throws(() => adm.F.adjustGoal('GT-3', { value: '1', start: '2026-09-01', end: '2026-10-15', reason: 'x' }), /仅销售运营/);
-    assert.deepEqual(adm.errors, []);
-  } finally { adm.close(); }
-
-  // 计算口径：用种子断言具体数字
-  const calc = load('sales-goals', '?role=MGR&as=U-1002');
+    const state = t.F.load(); delete state.financeVersion;
+    state.goals.push({ ...state.goals[0], id: 'OLD-REVENUE', metric: 'revenue' });
+    state.goals.find(goal => goal.id === 'GT-4').value = 123456;
+    state.spaces[0].brief = '保留本地已编辑客户内容';
+    saved = JSON.stringify(state);
+  } finally { t.close(); }
+  const migrated = load('sales-goals', '?role=MGR&as=U-1002', saved);
   try {
-    const state = calc.F.load();
-    const goal = id => state.goals.find(g => g.id === id);
-    // 个人流水达成 = 区间内该销售 Σ（RV-1 80 万 + RV-2 95 万；区间外 RV-6 与重复行 RV-11 不计）
-    const p3 = calc.F.goalProgress(goal('GT-3'), state);
-    assert.equal(p3.achieved, 1750000);
-    assert.equal(p3.gap, 250000);
-    assert.ok(Math.abs(p3.progress - 0.875) < 1e-9);
-    assert.equal(p3.phase, 'active');
-    // 全员流水含未归属与负毛利行：309 万；全员毛利 117 万（未配对成本 CS-9 不进毛利）
-    assert.equal(calc.F.goalProgress(goal('GT-1'), state).achieved, 3090000);
-    assert.equal(calc.F.goalProgress(goal('GT-2'), state).achieved, 1170000);
-    // 未归属 = 全员 − Σ个人（同一区间口径）
-    const board = calc.F.goalBoard(state);
-    assert.equal(board.unattributed.revenue, 240000);
-    assert.equal(board.unattributed.profit, 210000);
-    const personalSum = board.perSales.reduce((sum, row) => sum + row.revenueAchieved, 0);
-    assert.equal(board.all.revenue.achieved - personalSum, board.unattributed.revenue, '未归属业绩 = 全员达成 − 个人达成之和');
-    // 目标差异：全员 − 同区间个人之和
-    assert.equal(board.targetDiff.revenue, 2800000);
-    assert.equal(board.targetDiff.profit, 1200000);
-    // 超额：U-1004 毛利 70 万 vs 目标 60 万
-    const p4 = calc.F.goalProgress(goal('GT-4'), state);
-    assert.equal(p4.achieved, 700000);
-    assert.equal(p4.gap, 0);
-    assert.ok(p4.progress > 1);
-    // 重叠区间各自独立计算：GT-5 区间 09-10 ~ 09-30 达成 95 万
-    const p5 = calc.F.goalProgress(goal('GT-5'), state);
-    assert.equal(p5.achieved, 950000);
-    assert.ok(calc.F.goalOverlaps(goal('GT-5'), state).some(g => g.id === 'GT-3'), '重叠检测命中');
-    // 零目标：不计算进度与缺口；负毛利如实计入
-    const p7 = calc.F.goalProgress(goal('GT-7'), state);
-    assert.equal(p7.achieved, -60000, '负毛利如实计入');
-    assert.equal(p7.progress, null);
-    assert.equal(p7.gap, null);
-    // 未开始 / 已结束相位
-    assert.equal(calc.F.goalProgress(goal('GT-8'), state).phase, 'not_started');
-    const p9 = calc.F.goalProgress(goal('GT-9'), state);
-    assert.equal(p9.phase, 'ended');
-    assert.equal(p9.achieved, 500000, '已结束区间进度定格');
-    // 异常清单三分支：成本未配对 / 时间缺失 / 重复去重（跨 realm 数组先展开再断言）
-    assert.deepEqual([...state.datahubErrors.map(item => item.kind)].sort(), ['cost_unmatched', 'duplicate', 'missing_time']);
-    // 无目标销售只输出达成
-    const my6 = calc.F.myGoalBoard('U-1006', state);
-    assert.equal(my6.revenue, null);
-    assert.equal(my6.revenueAchieved, 300000);
-    assert.equal(my6.profitAchieved, 120000);
-    assert.deepEqual(calc.errors, []);
-  } finally { calc.close(); }
-
-  // 销售视角分支：零目标说明、未设置只输出达成、全空空态
-  const sls8 = load('sales-goals', '?role=SLS&as=U-1008');
-  try {
-    const text = sls8.doc.querySelector('#fp-content').textContent;
-    assert.match(text, /目标已设定为 0，不计算进度/);
-    assert.match(text, /目标尚未设定，当前达成 20 万/, '未设流水目标只输出达成');
-    assert.equal(text.includes('Infinity'), false);
-    assert.equal(text.includes('NaN'), false);
-    assert.ok(sls8.doc.querySelector('[data-goal-card] span[style*="red"]'), '销售侧负毛利同样红字');
-  } finally { sls8.close(); }
-  const sls6 = load('sales-goals', '?role=SLS&as=U-1006');
-  try {
-    const text = sls6.doc.querySelector('#fp-content').textContent;
-    assert.match(text, /目标尚未设定，当前达成 30 万/);
-    assert.equal(sls6.doc.querySelector('[data-goal-card] .fp-bar'), null, '未设置不渲染进度条');
-    assert.equal(text.includes('缺口 0'), false, '未录目标不显示零缺口');
-  } finally { sls6.close(); }
-  const sls9 = load('sales-goals', '?role=SLS&as=U-1009');
-  try {
-    assert.match(sls9.doc.querySelector('#fp-content').textContent, /暂无目标与达成/, '无目标无达成给空态');
-  } finally { sls9.close(); }
-
-  // DataHub 失败：保留旧数字与截止时间、记录原因、只提醒运营（不推送、按日去重）
-  const hubT = load('sales-goals', '?role=MGR&as=U-1002');
-  let hubSaved;
-  try {
-    hubT.F.runDatahubSync('fail');
-    const hub = hubT.F.load().datahub;
-    assert.equal(hub.status, 'failed');
-    assert.equal(hub.lastSuccessAt, '2026-09-15 06:30', '失败保留最近成功时间');
-    assert.match(hub.failReason, /超时/);
-    const notices = hubT.F.load().notifications.filter(n => String(n.dedupKey).startsWith('ops:datahub:failed:'));
-    assert.deepEqual([...notices.map(n => n.recipient)].sort(), ['U-1001', 'U-1002', 'U-1003'], '运营异常只发超管与销售运营');
-    assert.ok(notices.every(n => n.type === '运营异常' && n.pushStatus === 'not_required'), '不发起移动端推送');
-    assert.ok(notices.every(n => n.link?.page === 'sales-goals' && n.link?.params?.tab === 'datahub'), '提醒直达数据状态页签');
-    assert.equal(hubT.F.load().notifications.some(n => String(n.dedupKey).startsWith('ops:datahub:failed:') && n.recipient === 'U-1004'), false, '销售无此提醒');
-    assert.equal(hubT.F.load().deliveries.some(d => d.title === 'DataHub 取数失败'), false, '无投递记录');
-    hubT.F.runDatahubSync('fail');
-    const again = hubT.F.load().notifications.filter(n => String(n.dedupKey).startsWith('ops:datahub:failed:'));
-    assert.equal(again.length, 3, '同日重复失败不重复生成');
-    assert.ok(again.every(n => n.deduped === 1), '重复触发合并计数');
-    hubSaved = hubT.save();
-    assert.deepEqual(hubT.errors, []);
-  } finally { hubT.close(); }
-  const failedView = load('sales-goals', '?role=MGR&as=U-1002', hubSaved);
-  try {
-    const text = failedView.doc.querySelector('#fp-content').textContent;
-    assert.match(text, /309 万/, '失败保留最近一次成功数字');
-    const note = failedView.doc.querySelector('[data-datahub-note]');
-    assert.match(note.textContent, /数据截止 2026-09-15 06:30/);
-    assert.match(note.textContent, /取数失败/);
-    click(failedView, '[data-tab="datahub"]');
-    assert.equal(failedView.doc.querySelector('[data-datahub-status]').dataset.datahubStatus, 'failed');
-    assert.match(failedView.doc.querySelector('[data-datahub-status]').textContent, /失败原因/);
-    assert.ok(assertFeatureTable(failedView.doc.querySelector('[data-datahub-whitelist]'), 'DataHub 取数白名单', 'R17/白名单') > 0);
-    assert.ok(assertFeatureTable(failedView.doc.querySelector('[data-datahub-errors]'), 'DataHub 取数异常清单', 'R17/异常清单') > 0);
-    click(failedView, '[data-action="hub-sync"][data-value="ok"]');
-    assert.equal(failedView.F.load().datahub.status, 'ok', '手动取数恢复正常');
-    assert.deepEqual(failedView.errors, []);
-  } finally { failedView.close(); }
-  const slsInbox = load('message-center', '?role=SLS&as=U-1004', hubSaved);
-  try {
-    click(slsInbox, '[data-tab="all"]');
-    assert.equal([...slsInbox.doc.querySelectorAll('[data-message-row]')].some(row => row.textContent.includes('DataHub 取数失败')), false, '销售收件箱看不到取数失败提醒');
-  } finally { slsInbox.close(); }
-  const mgrInbox = load('message-center', '?role=MGR&as=U-1002', hubSaved);
-  try {
-    const row = [...mgrInbox.doc.querySelectorAll('[data-message-row]')].find(item => item.textContent.includes('DataHub 取数失败'));
-    assert.ok(row, '运营收件箱可见取数失败提醒');
-    assert.ok(row.querySelector('[data-message]')?.href.includes('sales-goals'), '提醒直达销售目标与进度页');
-  } finally { mgrInbox.close(); }
-
-  // 重置为未接入：看板整体「暂无可用达成数据」，不显示零达成
-  const reset = load('sales-goals', '?role=MGR&as=U-1002');
-  let resetSaved;
-  try {
-    reset.F.resetDatahub();
-    assert.equal(reset.F.load().datahub.status, 'never');
-    resetSaved = reset.save();
-  } finally { reset.close(); }
-  const neverMgr = load('sales-goals', '?role=MGR&as=U-1002', resetSaved);
-  try {
-    const text = neverMgr.doc.querySelector('#fp-content').textContent;
-    assert.match(text, /暂无可用达成数据，DataHub 接口尚未接入/);
-    assert.equal(neverMgr.doc.querySelector('[data-goal-board]'), null, '未接入不渲染逐人表');
-    assert.equal(neverMgr.doc.querySelector('[data-goal-card]'), null, '未接入不渲染达成卡');
-    assert.equal(text.includes('0 万'), false, '不显示零达成');
-    click(neverMgr, '[data-tab="datahub"]');
-    assert.equal(neverMgr.doc.querySelector('[data-datahub-status]').dataset.datahubStatus, 'never');
-    assert.match(neverMgr.doc.querySelector('[data-datahub-status]').textContent, /从未成功取数|尚未接入/);
-    assert.deepEqual(neverMgr.errors, []);
-  } finally { neverMgr.close(); }
-  const neverSls = load('sales-goals', '?role=SLS&as=U-1004', resetSaved);
-  try {
-    assert.match(neverSls.doc.querySelector('#fp-content').textContent, /暂无可用达成数据/);
-    assert.equal(neverSls.doc.querySelector('[data-goal-card]'), null, '销售侧未接入同样不显示达成卡');
-  } finally { neverSls.close(); }
-
-  // 菜单：ADM/MGR 菜单中销售目标与进度位于经营洞察之后；SLS 位于今日该跟之后且首项仍是客户跟进空间
-  const mgrMenu = load('customer-spaces', '?role=MGR&as=U-1002');
-  try {
-    const keys = [...mgrMenu.doc.querySelectorAll('#sc-navigation [data-menu]')].map(node => node.dataset.menu);
-    assert.equal(keys.indexOf('sales-goals'), keys.indexOf('employee-insights') + 1, '运营菜单在经营洞察后挂销售目标与进度');
-  } finally { mgrMenu.close(); }
-  const slsMenu = load('customer-spaces', '?role=SLS&as=U-1004');
-  try {
-    const keys = [...slsMenu.doc.querySelectorAll('#sc-navigation [data-menu]')].map(node => node.dataset.menu);
-    assert.equal(keys[0], 'customer-spaces', '销售菜单首项仍是客户跟进空间');
-    assert.equal(keys.indexOf('sales-goals'), keys.indexOf('today-follow') + 1, '销售菜单在今日该跟后挂销售目标与进度');
-  } finally { slsMenu.close(); }
+    const state = migrated.F.load();
+    assert.equal(state.financeVersion, 2);
+    assert.ok(state.legacyFinance.goals.some(goal => goal.id === 'OLD-REVENUE'));
+    assert.ok(state.goals.every(goal => goal.metric === 'profit'));
+    assert.equal(state.goals.find(goal => goal.id === 'GT-4').value, 123456);
+    assert.equal(state.spaces[0].brief, '保留本地已编辑客户内容');
+  } finally { migrated.close(); }
 });
 
 test('R10 录音归位：三方同步唯一来源、商机锚定校验、多空间独立与部分成功分展', () => {

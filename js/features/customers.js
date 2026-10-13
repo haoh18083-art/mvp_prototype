@@ -1,4 +1,4 @@
-/** 客户跟进空间列表与客户空间次级页：承载 R02 生命周期、内容就绪度、R03 内容装载、R04 五入口全景与溯源、R05 角色边界及方案页签。 */
+/** 客户跟进空间列表与客户空间次级页：承载 R02 生命周期、内容就绪度、R03 内容装载、R04 六入口全景与溯源、R05 角色边界及方案页签。 */
 (function (SC, F) {
   'use strict';
   const e = F.e;
@@ -315,12 +315,12 @@
   };
 
   /**
-   * 客户空间次级页（五入口）：概览为默认入口，客户、商机、跟进、资料为明细入口。
+   * 客户空间次级页（六入口）：概览为默认入口，客户、商机、跟进、资料、历史毛利为明细入口。
    * 0921 版面（与移动端口径对齐）：吸顶 chrome 承载状态角标、写入口与更新铃铛（红点=有新结果可看，打开更新抽屉即已读）；
-   * 概览为 指标条 → 一句话判断 → 经营焦点 → 客户事实 → 低频板块折叠 的固定次序，常显区不放更新内容；
-   * 更新历史收进更新抽屉（与跟进 Tab 同源、倒序全量、不另建独立历史）；空间助手为悬浮入口 + 抽屉，五个 Tab 均可唤出；
+   * 概览为 当月毛利 → 指标条 → 一句话判断 → 经营焦点 → 客户事实 → 低频板块折叠 的固定次序，常显区不放更新内容；
+   * 更新历史收进更新抽屉（与跟进 Tab 同源、倒序全量、不另建独立历史）；空间助手为悬浮入口 + 抽屉，六个 Tab 均可唤出；
    * 右侧栏只留「下一步任务 / 客户档案」两个未在别处承载的内容，不再重复展示空间动态。
-   * 页面契约（回归测试依赖）：data-tab 五入口、data-subtab 跟进子页签（跟进记录/行为记录/方案往来/录音）、data-overview-panel 十板块、
+   * 页面契约（回归测试依赖）：data-tab 六入口、data-subtab 跟进子页签（跟进记录/行为记录/方案往来/录音）、data-overview-panel 十板块、
    * data-overview-metrics 指标条、data-open-updates / data-updates-status / data-update-history / data-history-node 更新流、
    * data-change-latest 更新抽屉内最近一次变化、data-space-lifecycle / data-space-readiness 双状态轴、
    * data-scope-layer 六层装载状态、data-co-followers 同跟名单、data-behavior-* 行为记录、
@@ -328,8 +328,9 @@
    */
   F.views['followup-workbench'] = function (root) {
     let spaceId = SC.param('space') || F.visible()[0]?.id;
-    // 五个空间入口固定为概览、客户、商机、跟进、资料；跟进内再分跟进记录、行为记录、方案往来、录音。
-    const entries = [['overview', '概览'], ['customer', '客户'], ['opps', '商机'], ['followup', '跟进'], ['documents', '资料']];
+    // 六个空间入口固定为概览、客户、商机、跟进、资料、历史毛利；跟进内再分跟进记录、行为记录、方案往来、录音。
+    const entries = [['overview', '概览'], ['customer', '客户'], ['opps', '商机'], ['followup', '跟进'], ['documents', '资料'], ['profit', '历史毛利']];
+    let profitMonth = SC.param('month') || F.financeMonth(-1);
     const subEntries = [['followups', '跟进记录'], ['behaviors', '行为记录'], ['solutions', '方案往来'], ['recordings', '录音']];
     // 旧链接（tab=followups / behaviors / solutions / recordings）仍然可用，落到跟进下对应的子页签；客户画像已并入客户入口。
     const aliases = { followups: ['followup', 'followups'], behaviors: ['followup', 'behaviors'], solutions: ['followup', 'solutions'], recordings: ['followup', 'recordings'], profile: ['customer'] };
@@ -735,6 +736,7 @@
       const factKeys = ['who', 'people'];
       const foldKeys = ['basics', 'opportunity', 'pending'];
       return `<div class="fp-stack fp-overview" data-overview>
+        ${F.spaceProfitCard(w.id, state)}
         ${metricStrip(w, state)}
         <section class="fp-verdict" data-overview-panel="verdict" data-panel-status="${e(verdict.status)}">
           <div class="fp-verdict-head"><span class="fp-ai-tag">${SC.icon('sparkles', 13)}AI 全景 · ${e(verdict.title)}</span><span data-overview-status="${e(status)}">${F.badge(statusMeta[0], statusMeta[1])}</span></div>
@@ -861,6 +863,12 @@
       </section>${lifeCallout}${readinessCallout}<div class="fp-split"><div class="fp-stack"><section class="fp-panel fp-ws-panel">${F.tabs(entries, tab)}${tab === 'followup' ? `<nav class="fp-tabs fp-subtabs" aria-label="跟进内容分类">${subEntries.map(([key, label]) => `<button type="button" data-subtab="${key}" class="${key === sub ? 'is-active' : ''}" aria-pressed="${key === sub}">${label}</button>`).join('')}</nav>` : ''}<div class="fp-pad" data-tab-body></div></section></div><aside class="fp-stack fp-rail">${F.panel('下一步任务', `<div class="fp-pad fp-stack">${tasks.length ? tasks.map(t => `<div class="fp-task${t.done ? ' is-done' : ''}"><div class="fp-actions">${F.badge(t.done ? '已完成' : t.due < F.today ? '已逾期' : '待跟进', t.done ? 'green' : 'amber')}<small class="u-t3">${t.due}</small></div><p class="u-mt2">${e(t.title)}</p>${!t.done && F.canWrite(w) ? `<div class="u-mt2">${F.button('标记完成', 'task', t.id)}</div>` : ''}</div>`).join('') : `<div class="fp-empty fp-empty--slim"><h3>暂无待办任务</h3><p>跟进中产生的下一步会汇聚到这里。</p></div>`}</div>`)}${F.panel('客户档案', `<div class="fp-pad"><dl class="fp-kv"><dt>客户等级</dt><dd>${F.badge(w.grade, 'brand')}</dd><dt>联系人</dt><dd>${e(w.contact)}</dd><dt>联系职位</dt><dd>信息技术负责人</dd><dt>归属销售</dt><dd>${e(F.name(w.sales))}</dd><dt>客户池</dt><dd>${pool}</dd><dt>确权来源</dt><dd>${e(entitlementText(w))}</dd><dt>当前商机</dt><dd>${w.entitlements?.opportunities?.length ? `${w.entitlements.opportunities.length} 条` : '无本人确权商机'}</dd><dt>冻结原因</dt><dd>${frozen ? e(w.lifecycleEvents?.find(event => event.type === 'frozen')?.reason || '确权已结束') : '—'}</dd></dl></div>`)}</aside></div><button type="button" class="fp-assistant-fab" data-open-assistant aria-label="空间助手：围绕本空间问答" title="空间助手">${SC.icon('sparkles', 15)}<span>空间助手</span></button>`;
       const target = root.querySelector('[data-tab-body]');
       if (tab === 'overview') target.innerHTML = renderOverview(w, state);
+      if (tab === 'profit') {
+        target.innerHTML = F.financeHistory(w.id, profitMonth, state);
+        target.querySelector('[data-profit-month]').onchange = event => {
+          if (F.monthRange(event.target.value) && event.target.value < F.financeMonth()) { profitMonth = event.target.value; history.replaceState(null, '', F.link('followup-workbench', { space: spaceId, tab, month: profitMonth })); draw(); }
+        };
+      }
       if (tab === 'customer') target.innerHTML = renderCustomer(w, state);
       if (tab === 'opps') {
         const totalAmount = w.opps.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
@@ -914,8 +922,8 @@
         const rows = F.records('solutions').filter(r => r.space === w.id && (!r.withdrawn || (F.role === 'SOL' && r.author === F.actor.id)));
         target.innerHTML = rows.length ? rows.map(r => `<article class="fp-event"><div class="fp-actions"><strong>${e(r.title)}</strong>${F.solutionStatus(r).key === 'withdrawn' ? F.badge('已撤回', 'neutral') : F.badge(r.reply ? '已回复' : r.read ? '已读' : '未读', r.reply ? 'green' : 'brand')}</div><p>${e(r.body)}</p><div class="fp-solution-assets">${(r.attachments || []).length ? `<ul class="fp-file-list fp-file-list--compact">${(r.attachments || []).map(file => { const ext = F.solutionFileExt(file.name) || 'file'; return `<li class="fp-file-row" data-attachment-row="${e(ext)}"><span class="fp-file-ext">${e(ext)}</span><span class="fp-file-name">${e(file.name)}</span><small class="fp-file-size">${e(file.size || '')}</small></li>`; }).join('')}</ul>` : ''}${r.externalLink ? `<a class="fp-link-chip" href="${e(r.externalLink)}" target="_blank" rel="noreferrer">外部链接</a>` : ''}</div><small>${e(F.name(r.author))} · ${e(r.date)}${r.readAt ? ' · 已读 ' + e(r.readAt) : ''}</small>${r.reply ? `<div class="fp-callout u-mt3">销售回复：${e(r.reply)}<small class="fp-sub">${r.replyRead ? '方案人员已读' : '方案人员未读'}</small></div>` : ''}<div class="fp-actions u-mt3">${F.role === 'SLS' ? F.button('查看并回复', 'solution', r.id) : F.button('查看详情', 'solution', r.id)}</div></article>`).join('') : F.empty('当前空间尚未收到方案。');
       }
-      const syncUrl = () => history.replaceState(null, '', F.link('followup-workbench', { space: spaceId, tab, ...(tab === 'followup' ? { sub } : {}) }));
-      root.querySelector('[name=space]').onchange = event => { spaceId = event.target.value; syncUrl(); draw(); };
+      const syncUrl = () => history.replaceState(null, '', F.link('followup-workbench', { space: spaceId, tab, ...(tab === 'followup' ? { sub } : {}), ...(tab === 'profit' ? { month: profitMonth } : {}) }));
+      root.querySelector('[name=space]').onchange = event => { spaceId = event.target.value; profitMonth = F.financeMonth(-1); syncUrl(); draw(); };
       root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; syncUrl(); draw(); });
       root.querySelectorAll('[data-subtab]').forEach(b => b.onclick = () => { sub = b.dataset.subtab; syncUrl(); draw(); });
       // 更新入口与空间助手：两个悬浮/顶栏入口在每次重画后重新挂接；抽屉内部各自绑定事件。

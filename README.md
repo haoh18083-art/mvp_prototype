@@ -71,4 +71,16 @@ docker exec qt2-v02-prototype sh -lc \
   'find js tools tests -type f \( -name "*.js" -o -name "*.cjs" \) -print0 | xargs -0 -n1 node --check'
 ```
 
-测试使用虚构数据和 `jsdom`，不修改生产数据。`tests/features.cjs` 覆盖 22 个功能页的渲染、页签、权限和主要交互；`tests/login.cjs` 覆盖登录校验、会话和四角色分流；`tests/page-navigation.cjs` 覆盖导航、退出、当前操作条、本地链接与静态资源；`tests/mobile.cjs` 覆盖 R09 销售移动端的四入口、客户搜索、五 Tab、写入、离线草稿与并发处理；`tests/mobile-chat.cjs` 覆盖本人助手对话页的流式回答、工单展开与失败重试、签核双路径、停止生成、深浅色切换、编辑重发与分支对话。
+测试使用虚构数据和 `jsdom`，不修改生产数据。`tests/features.cjs` 覆盖 22 个功能页的渲染、页签、权限和主要交互；`tests/login.cjs` 覆盖登录校验、会话和四角色分流；`tests/page-navigation.cjs` 覆盖导航、退出、当前操作条、本地链接与静态资源；`tests/mobile.cjs` 覆盖 R09 销售移动端的四入口、客户搜索、六 Tab、写入、离线草稿与并发处理；`tests/mobile-chat.cjs` 覆盖本人助手对话页的流式回答、工单展开与失败重试、签核双路径、停止生成、深浅色切换、编辑重发与分支对话。
+
+## 2026-10-12 毛利模块更新
+
+- [销售月度毛利](pages/sales-goals.html?role=SLS&as=U-1004)：先看本人月度总额，再展开客户及原始产品类型。
+- [运营月度毛利](pages/sales-goals.html?role=MGR&as=U-1002)：按销售、客户池和月份筛选，客户下先拆销售绑定再看产品。
+- [毛利目标维护](pages/sales-goals.html?role=MGR&as=U-1002&tab=manage)：只录入毛利目标，支持调整原因及历史；超管只读。
+- [客户空间历史毛利](pages/followup-workbench.html?role=SLS&as=U-1004&space=WS-201&tab=profit)：与概览当月卡片分开切月，固定该空间客户与销售绑定。
+- [方案承接范围评审入口](pages/sales-goals.html?role=SOL&as=U-1010)：按当前承接客户池去重看客户全量，正式导航位置仍待评审。
+
+毛利使用应收减对应成本；成本未结算取预估成本、已结算取结算成本；收入只按收入结算时间判断状态。预计合计包含已结算与待结算预计，缺失金额待核对，明确零正常计算。毛利按记账月份，流水总数按收入结算月份。移动端概览、历史毛利和今日经营共用同一计算结果。
+
+本轮仍为虚构演示数据，未接入 DataHub 正式同步。旧本地财务样例首次加载时升级，原始财务快照保留在本地；其他模块内容及毛利目标调整保留。验收详情和截图见 [毛利模块验收记录](验收/20261012-毛利模块验收.md)。

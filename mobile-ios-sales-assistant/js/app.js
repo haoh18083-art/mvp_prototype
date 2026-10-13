@@ -121,6 +121,7 @@ function spaceBadges(space) {
 }
 
 const frozenAt = (space) => space.frozenAt || (space.lifecycleEvents || []).find((event) => event.type === 'frozen')?.at || '';
+
 /* js/components/welcome.js */
 /*
  * 欢迎区：打字机文案、会眨眼的熊形象和「进入聊天助手」入口。
@@ -186,6 +187,7 @@ function setupWelcome() {
   runWelcomeIntro();
   watchWelcomeModule();
 }
+
 /* js/components/icons.js */
 /*
  * 图标注册表：移动端主 UI 所有图标的唯一来源。
@@ -232,6 +234,7 @@ function icon(name, className) {
 function rowChevron(toggle) {
   return `<span class="row-chevron${toggle ? ' is-toggle' : ''}" aria-hidden="true">${icon(toggle ? 'chevron-down' : 'chevron-right')}</span>`;
 }
+
 /* js/components/views-main.js */
 /*
  * R09 §4.1 四个主入口：今日 / 客户 / 相关 / 我的。
@@ -269,34 +272,22 @@ function renderWelcome() {
   </section>`;
 }
 
-/**
- * 本周经营：与网页端销售目标看板同一份取数（F.myGoalBoard）。
- * R17 口径——DataHub 不可用时只说明来源状态，不提供模拟达成数据。
- */
+/** 本月经营与毛利目标分开标注期间，共用 R17 的预计与已结算结果。 */
 function renderPerformance(state) {
-  const hub = state.datahub || {};
   const board = F.myGoalBoard(F.actor.id, state);
-  const ok = hub.status === 'ok';
-  const unavailable = hub.status === 'never' ? 'DataHub 尚未接入，不提供模拟达成' : `DataHub 最近一次取数失败（最近成功 ${hub.lastSuccessAt || '无'}），本周数据暂不可用`;
-  const money = (value) => (Number(value) || 0).toLocaleString('zh-CN');
-  const cards = ok
-    ? [
-      ['本周流水', money(board.revenueAchieved) + ' 元', `按结算时间归集 · 数据截至 ${hub.lastSuccessAt}`],
-      ['本周毛利', money(board.profitAchieved) + ' 元', '结算金额 − 配对成本'],
-      ['流水达成', board.revenue ? Math.round(board.revenue.rate * 100) + '%' : '—', board.revenue ? `目标 ${money(board.revenue.goal.amount)} 元` : '本期尚未设定个人流水目标'],
-      ['毛利达成', board.profit ? Math.round(board.profit.rate * 100) + '%' : '—', board.profit ? `目标 ${money(board.profit.goal.amount)} 元` : '本期尚未设定个人毛利目标']
-    ]
-    : [
-      ['本周流水', '—', unavailable],
-      ['本周毛利', '—', unavailable],
-      ['流水达成', '—', 'DataHub 上线前不提供模拟达成'],
-      ['毛利达成', '—', 'DataHub 上线前不提供模拟达成']
-    ];
+  const value = amount => amount === null ? '—' : F.financeMoney(amount) + ' 元';
+  const goal = board.profit;
+  const cards = [
+    ['本月预计毛利', value(board.profitAchieved), `${F.financeMonth()} · 按记账月份${board.pendingCount ? ' · 部分待核对' : ''}`],
+    ['本月已结算毛利', value(board.settledProfit), '已包含在预计毛利合计中'],
+    ['本月流水总数', value(board.revenueAchieved), '按收入结算时间统计'],
+    ['毛利目标预计达成', goal?.progress == null ? '—' : (goal.progress * 100).toFixed(1) + '%', goal ? `${goal.goal.start} — ${goal.goal.end} · 目标 ${F.financeMoney(goal.target)} 元` : '毛利目标尚未设定']
+  ];
   return `<section class="ios-performance" data-od-id="ios-performance-overview">
-    <div class="ios-performance-head"><h2 class="t-heading">本周经营</h2></div>
-    <div class="ios-performance-track" role="region" aria-label="本周经营概览" tabindex="0">
-      ${cards.map(([title, value, note]) => `<article class="ios-performance-card"><p class="t-meta">${esc(title)}</p><strong class="t-figure is-text">${esc(value)}</strong><span class="t-meta">${esc(note)}</span></article>`).join('')}
-    </div></section>`;
+    <div class="ios-performance-head"><h2 class="t-heading">本月经营</h2></div>
+    <div class="ios-performance-track" role="region" aria-label="本月经营概览" tabindex="0">
+      ${cards.map(([title, amount, note]) => `<article class="ios-performance-card"><p class="t-meta">${esc(title)}</p><strong class="t-figure is-text">${esc(amount)}</strong><span class="t-meta">${esc(note)}</span></article>`).join('')}
+    </div><p class="t-meta">演示数据 · 截止 ${esc(board.dataAsOf || '暂无可用数据')}${board.stale ? ' · 同步失败，保留上次结果' : ''}</p></section>`;
 }
 
 /**
@@ -547,17 +538,19 @@ function viewProfile() {
 function emptyState(title, text) {
   return `<div class="empty-state"><strong class="t-title">${esc(title)}</strong><p class="t-meta">${esc(text)}</p></div>`;
 }
+
 /* js/components/views-space.js */
 /*
- * R09 §4.2–§4.4 空间详情：五个常驻 Tab、默认落地概览、折叠区每次进入重新收起、
+ * R09 §4.2–§4.4 空间详情：六个常驻 Tab、默认落地概览、折叠区每次进入重新收起、
  * 深链直达客户 Tab 并高亮、冻结只读、离线只读缓存、跟进与周复盘写入、并发先提交为准。
  * 内容全部取自桌面同一套 F.overview / F.contentScope / F.spacePlacements 等函数。
  */
 
-const SPACE_TABS = [['overview', '概览'], ['customer', '客户'], ['opps', '商机'], ['followup', '跟进'], ['documents', '资料']];
+const SPACE_TABS = [['overview', '概览'], ['customer', '客户'], ['opps', '商机'], ['followup', '跟进'], ['documents', '资料'], ['profit', '历史毛利']];
+const spaceFinanceMonths = {};
 const SPACE_SUBS = [['followups', '跟进记录'], ['behaviors', '行为记录'], ['solutions', '方案往来'], ['recordings', '录音']];
 
-/* 概览常显区（去卡片化分区）：指标条 → 一句话判断 → 客户画像 → 关键人与联系人 → 风险标记 → 当前卡点 → 最近动静；空间助手为可移动悬浮图标，唤出 4/5 屏抽屉问答（M05-1 §4.2、M05-3 §4.3，0921 版面）。 */
+/* 概览常显区（去卡片化分区）：当月毛利 → 指标条 → 一句话判断 → 客户画像 → 关键人与联系人 → 风险标记 → 当前卡点 → 最近动静；空间助手为可移动悬浮图标，唤出 4/5 屏抽屉问答（M05-1 §4.2、M05-3 §4.3，0921 版面）。 */
 const OVERVIEW_FOLDED = ['basics', 'opportunity', 'pending'];
 
 /** 状态 → 角标色：done/ready 绿、failed 红、其余蓝。 */
@@ -565,7 +558,7 @@ const chipTone = (status) => (status === 'done' || status === 'ready' || status 
 
 /**
  * 归位状态在移动端的口径：转写与智能总结由远端同步，移动端不跟转写线，
- * 归位后只表达客户信息更新情况（更新中、已完成或更新未完成）。
+ * 归位后只表达客户信息更新情况（已归位、更新中、已完成或更新未完成）。
  */
 const placementStatusLabel = (status) => (F.placementStatusMeta[status] || ['处理中'])[0];
 
@@ -762,6 +755,7 @@ function renderOverviewTab(space, state) {
     ? `<ul class="evidence-list">${peers.map((peer) => `<li><span class="t-body">${esc(peer.name)}</span></li>`).join('')}</ul>`
     : '<p class="t-meta">当前客户没有其他在跟销售。</p>';
   return `<div class="space-body" data-space-tab="overview">
+    ${F.spaceProfitCard(space.id, state)}
     ${metricStrip(space, state)}
     ${panelSection('verdict')}
     ${profileSection(space, byKey.who)}
@@ -939,6 +933,7 @@ function viewSpace(params) {
   const latestChanged = F.updateHistory(space.id, state).find(hasVisibleChange);
   const updatesUnread = !!latestChanged && !isChangeRead(latestChanged.id);
   const body = tab === 'overview' ? renderOverviewTab(space, state)
+    : tab === 'profit' ? `<div class="space-body gp-history-container" data-space-tab="profit">${F.financeHistory(space.id, spaceFinanceMonths[space.id], state)}</div>`
     : tab === 'customer' ? renderCustomerTab(space, state, params.highlight)
     : tab === 'opps' ? renderOppsTab(space)
     : tab === 'followup' ? renderFollowupTab(space, state, sub)
@@ -1028,6 +1023,7 @@ function openWriteSheet(space, kind, prefill, draftId) {
     });
   });
 }
+
 /* js/components/assistant.js */
 /* 助手 overlay：idle → opening → open → closing → idle，动画中忽略重复点击。 */
 const assistantPages = [...document.querySelectorAll('[data-assistant-page]')];
@@ -1095,6 +1091,7 @@ window.addEventListener('message', (event) => {
   if (event.source !== chatFrame?.contentWindow || event.data?.type !== 'sales-chat-close') return;
   closeAssistant();
 });
+
 /* js/components/app-shell.js */
 /*
  * 应用外壳：四主入口路由、底栏、本人助手悬浮入口、底部弹层与轻提示。
@@ -1314,6 +1311,13 @@ function centerActiveTabs(scope) {
 /* ---------------- 交互绑定 ---------------- */
 
 function bindView(route) {
+  // 历史月份只重绘当前空间的财务区域，概览始终读取当月。
+  viewRoot.querySelector('[data-profit-month]')?.addEventListener('change', event => {
+    if (F.monthRange(event.target.value) && event.target.value < F.financeMonth()) {
+      spaceFinanceMonths[route.space] = event.target.value;
+      render();
+    }
+  });
   // 欢迎区动效随「今日」重画补挂；每个会话只播一次打字机。
   if (route.view === 'today') setupWelcome();
   else welcomeObserver?.disconnect();
@@ -1476,7 +1480,7 @@ function bindView(route) {
     catch (error) { showToast(error.message); }
   }));
 
-  // 本周经营横滑：键盘左右键一次滚动一张卡片宽度
+  // 本月经营横滑：键盘左右键一次滚动一张卡片宽度
   const track = viewRoot.querySelector('.ios-performance-track');
   track?.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;

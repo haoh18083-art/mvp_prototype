@@ -1,4 +1,4 @@
-/** R09 销售移动端回归：四主入口、客户搜索、五 Tab、写入、离线草稿、并发与方案接收。 */
+/** R09 销售移动端回归：四主入口、客户搜索、六 Tab、写入、离线草稿、并发与方案接收。 */
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -123,19 +123,19 @@ test('R09 §4.1 今日入口消费与网页端同一份当日快照，收件箱�
       assert.equal(pauseButton.textContent.trim(), '暂不跟进');
       assert.equal(starButton.textContent.trim(), starButton.dataset.markAction === 'unstar' ? '取消星标' : '星标', '星标按钮反映当前状态');
     }
-    // 本周经营：与网页端销售目标看板同一份取数；DataHub 不可用时不给模拟达成
+    // 本月经营：与网页端销售目标看板同一份取数；DataHub 不可用时不给模拟达成
     const board = t.F.myGoalBoard('U-1004', t.F.load());
-    assert.match(t.view().textContent, new RegExp(String(board.revenueAchieved.toLocaleString('zh-CN'))), '本周流水与网页端同一份取数');
-    assert.match(t.view().textContent, /数据截至 2026-09-15 06:30/);
+    assert.match(t.view().textContent, new RegExp(String(board.revenueAchieved.toLocaleString('zh-CN'))), '本月流水与网页端同一份取数');
+    assert.ok(t.view().textContent.includes('截止 ' + board.dataAsOf));
     const broken = load('#/today', JSON.stringify((() => {
       const state = t.F.load();
       state.datahub = { ...state.datahub, status: 'failed', failReason: '接口连续超时' };
       return state;
     })()));
     try {
-      assert.match(broken.view().textContent, /DataHub 最近一次取数失败/);
-      assert.match(broken.view().textContent, /不提供模拟达成/);
-      assert.equal(broken.view().querySelector('.ios-performance-track').textContent.includes('%'), false, '取数失败时不给达成比例');
+      assert.match(broken.view().textContent, /同步失败，保留上次结果/);
+      assert.ok(broken.view().textContent.includes(board.revenueAchieved.toLocaleString('zh-CN')));
+      assert.equal(broken.view().querySelector('.ios-performance-track').textContent.includes('%'), true, '取数失败保留上次有效达成并标记截止时间');
     } finally { broken.close(); }
     // 收件箱：未读优先、带计数、每条只有一个动作，不装全员广播
     const inbox = t.view().querySelector('[data-inbox]');
@@ -202,18 +202,18 @@ test('R13 §4.2 今天该跟的标记入口：星标一键开或关，暂不跟�
   } finally { t.close(); }
 });
 
-test('R09 §4.2 五 Tab 常驻、默认落地概览、折叠区不记忆、深链高亮与冻结只读', () => {
+test('R09 §4.2 六 Tab 常驻、默认落地概览、折叠区不记忆、深链高亮与冻结只读', () => {
   const t = load('#/space/WS-201/overview');
   try {
-    assert.deepEqual([...t.view().querySelectorAll('[data-tab]')].map(node => node.dataset.tab), ['overview', 'customer', 'opps', 'followup', 'documents']);
+    assert.deepEqual([...t.view().querySelectorAll('[data-tab]')].map(node => node.dataset.tab), ['overview', 'customer', 'opps', 'followup', 'documents', 'profit']);
     assert.ok(t.view().querySelector('[data-space-tab="overview"]'), '默认落地概览');
     const chrome = t.view().querySelector('.space-chrome');
-    assert.ok(chrome && chrome.querySelector('[data-space-topbar]') && chrome.querySelector('[data-tab]'), '顶栏与五 Tab 收在吸顶区');
+    assert.ok(chrome && chrome.querySelector('[data-space-topbar]') && chrome.querySelector('[data-tab]'), '顶栏与六 Tab 收在吸顶区');
     assert.equal(chrome.contains(t.view().querySelector('[data-space-tab="overview"]')), false, '正文不进吸顶区');
     // 常显区（去卡片化分区）：指标条在最上方，随后一句话判断、客户画像、关键人、风险标记、当前卡点、最近动静
     const sections = [...t.view().querySelectorAll('.space-body > .ov-section')];
     assert.ok(sections.length >= 7, '常显区分区齐全');
-    assert.ok(sections[0].hasAttribute('data-overview-metrics'), '指标条在概览最上方');
+    assert.ok(sections[0].hasAttribute('data-overview-metrics'), '经营指标条跟随当月毛利卡片');
     assert.ok(t.view().querySelector('[data-overview-panel="verdict"]'));
     assert.ok(t.view().querySelector('[data-overview-panel="who"]'), '客户画像常显');
     const whoLead = t.view().querySelector('[data-overview-panel="who"] > .t-body');
@@ -314,7 +314,7 @@ test('R09 §4.2 五 Tab 常驻、默认落地概览、折叠区不记忆、深�
     assert.deepEqual(waiting.errors, []);
   } finally { waiting.close(); }
 
-  // 冻结空间：可进入、五 Tab 可读、无写入入口、快捷问答禁用
+  // 冻结空间：可进入、六 Tab 可读、无写入入口、快捷问答禁用
   const frozen = load('#/space/WS-206/followup');
   try {
     assert.ok(frozen.view().querySelector('[data-frozen-note]'), '顶部标注冻结');
@@ -699,4 +699,33 @@ test('R10 §4.2 空间侧归位：行内查看详情与归位到本空间，商�
     assert.match(ownerOnly.view().querySelector('[data-place-blocked]').textContent, /没有商机/, '说明不可归位原因');
     assert.deepEqual(ownerOnly.errors, []);
   } finally { ownerOnly.close(); }
+});
+
+/** R17 两端共享财务规则，历史选择与当月展示互相独立。 */
+test('R09/R17 移动空间当月与历史毛利、原始产品、缺失金额和冻结明细边界', () => {
+  const t = load('#/space/WS-201/overview');
+  try {
+    assert.equal(t.view().querySelector('[data-profit-total]').textContent, '67,500.00');
+    assert.equal(t.view().querySelector('[data-turnover]').textContent, '198,000.00');
+    t.go('#/space/WS-201/profit');
+    assert.equal(t.view().querySelector('[data-profit-total]').textContent, '45,000.00');
+    assert.equal(t.view().querySelector('[data-profit-entry="RV-15"] .gp-status').textContent, '待核对');
+    const month = t.view().querySelector('[data-profit-month]');
+    month.value = t.F.financeMonth(-2); month.dispatchEvent(new t.w.Event('change', { bubbles: true }));
+    assert.equal(t.view().querySelector('[data-profit-total]').textContent, '5,000.00');
+    assert.ok(t.view().querySelector('[data-profit-product="按次-其他-1010号码-低消"]'));
+    t.go('#/space/WS-201/overview');
+    assert.equal(t.view().querySelector('[data-profit-total]').textContent, '67,500.00');
+    t.go('#/space/WS-201/profit');
+    assert.equal(t.view().querySelector('[data-profit-month]').value, t.F.financeMonth(-2), '按空间记忆历史月份');
+    const state = t.F.load(); state.datahub.status = 'never'; state.datahub.lastSuccessAt = ''; t.F.save(state);
+    t.go('#/space/WS-201/overview');
+    assert.equal(t.view().querySelector('[data-profit-total]').textContent, '—');
+    state.spaces.find(space => space.id === 'WS-201').lifecycle = 'frozen';
+    state.spaces.find(space => space.id === 'WS-201').state = 'frozen'; t.F.save(state);
+    t.go('#/space/WS-201/profit');
+    assert.equal(t.view().querySelector('[data-finance-state]').dataset.financeState, 'forbidden');
+    assert.equal(t.view().querySelector('[data-profit-entry]'), null);
+    assert.deepEqual(t.errors, []);
+  } finally { t.close(); }
 });

@@ -34,34 +34,22 @@ function renderWelcome() {
   </section>`;
 }
 
-/**
- * 本周经营：与网页端销售目标看板同一份取数（F.myGoalBoard）。
- * R17 口径——DataHub 不可用时只说明来源状态，不提供模拟达成数据。
- */
+/** 本月经营与毛利目标分开标注期间，共用 R17 的预计与已结算结果。 */
 function renderPerformance(state) {
-  const hub = state.datahub || {};
   const board = F.myGoalBoard(F.actor.id, state);
-  const ok = hub.status === 'ok';
-  const unavailable = hub.status === 'never' ? 'DataHub 尚未接入，不提供模拟达成' : `DataHub 最近一次取数失败（最近成功 ${hub.lastSuccessAt || '无'}），本周数据暂不可用`;
-  const money = (value) => (Number(value) || 0).toLocaleString('zh-CN');
-  const cards = ok
-    ? [
-      ['本周流水', money(board.revenueAchieved) + ' 元', `按结算时间归集 · 数据截至 ${hub.lastSuccessAt}`],
-      ['本周毛利', money(board.profitAchieved) + ' 元', '结算金额 − 配对成本'],
-      ['流水达成', board.revenue ? Math.round(board.revenue.rate * 100) + '%' : '—', board.revenue ? `目标 ${money(board.revenue.goal.amount)} 元` : '本期尚未设定个人流水目标'],
-      ['毛利达成', board.profit ? Math.round(board.profit.rate * 100) + '%' : '—', board.profit ? `目标 ${money(board.profit.goal.amount)} 元` : '本期尚未设定个人毛利目标']
-    ]
-    : [
-      ['本周流水', '—', unavailable],
-      ['本周毛利', '—', unavailable],
-      ['流水达成', '—', 'DataHub 上线前不提供模拟达成'],
-      ['毛利达成', '—', 'DataHub 上线前不提供模拟达成']
-    ];
+  const value = amount => amount === null ? '—' : F.financeMoney(amount) + ' 元';
+  const goal = board.profit;
+  const cards = [
+    ['本月预计毛利', value(board.profitAchieved), `${F.financeMonth()} · 按记账月份${board.pendingCount ? ' · 部分待核对' : ''}`],
+    ['本月已结算毛利', value(board.settledProfit), '已包含在预计毛利合计中'],
+    ['本月流水总数', value(board.revenueAchieved), '按收入结算时间统计'],
+    ['毛利目标预计达成', goal?.progress == null ? '—' : (goal.progress * 100).toFixed(1) + '%', goal ? `${goal.goal.start} — ${goal.goal.end} · 目标 ${F.financeMoney(goal.target)} 元` : '毛利目标尚未设定']
+  ];
   return `<section class="ios-performance" data-od-id="ios-performance-overview">
-    <div class="ios-performance-head"><h2 class="t-heading">本周经营</h2></div>
-    <div class="ios-performance-track" role="region" aria-label="本周经营概览" tabindex="0">
-      ${cards.map(([title, value, note]) => `<article class="ios-performance-card"><p class="t-meta">${esc(title)}</p><strong class="t-figure is-text">${esc(value)}</strong><span class="t-meta">${esc(note)}</span></article>`).join('')}
-    </div></section>`;
+    <div class="ios-performance-head"><h2 class="t-heading">本月经营</h2></div>
+    <div class="ios-performance-track" role="region" aria-label="本月经营概览" tabindex="0">
+      ${cards.map(([title, amount, note]) => `<article class="ios-performance-card"><p class="t-meta">${esc(title)}</p><strong class="t-figure is-text">${esc(amount)}</strong><span class="t-meta">${esc(note)}</span></article>`).join('')}
+    </div><p class="t-meta">演示数据 · 截止 ${esc(board.dataAsOf || '暂无可用数据')}${board.stale ? ' · 同步失败，保留上次结果' : ''}</p></section>`;
 }
 
 /**

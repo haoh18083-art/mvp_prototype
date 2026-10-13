@@ -1,13 +1,14 @@
 /*
- * R09 §4.2–§4.4 空间详情：五个常驻 Tab、默认落地概览、折叠区每次进入重新收起、
+ * R09 §4.2–§4.4 空间详情：六个常驻 Tab、默认落地概览、折叠区每次进入重新收起、
  * 深链直达客户 Tab 并高亮、冻结只读、离线只读缓存、跟进与周复盘写入、并发先提交为准。
  * 内容全部取自桌面同一套 F.overview / F.contentScope / F.spacePlacements 等函数。
  */
 
-const SPACE_TABS = [['overview', '概览'], ['customer', '客户'], ['opps', '商机'], ['followup', '跟进'], ['documents', '资料']];
+const SPACE_TABS = [['overview', '概览'], ['customer', '客户'], ['opps', '商机'], ['followup', '跟进'], ['documents', '资料'], ['profit', '历史毛利']];
+const spaceFinanceMonths = {};
 const SPACE_SUBS = [['followups', '跟进记录'], ['behaviors', '行为记录'], ['solutions', '方案往来'], ['recordings', '录音']];
 
-/* 概览常显区（去卡片化分区）：指标条 → 一句话判断 → 客户画像 → 关键人与联系人 → 风险标记 → 当前卡点 → 最近动静；空间助手为可移动悬浮图标，唤出 4/5 屏抽屉问答（M05-1 §4.2、M05-3 §4.3，0921 版面）。 */
+/* 概览常显区（去卡片化分区）：当月毛利 → 指标条 → 一句话判断 → 客户画像 → 关键人与联系人 → 风险标记 → 当前卡点 → 最近动静；空间助手为可移动悬浮图标，唤出 4/5 屏抽屉问答（M05-1 §4.2、M05-3 §4.3，0921 版面）。 */
 const OVERVIEW_FOLDED = ['basics', 'opportunity', 'pending'];
 
 /** 状态 → 角标色：done/ready 绿、failed 红、其余蓝。 */
@@ -212,6 +213,7 @@ function renderOverviewTab(space, state) {
     ? `<ul class="evidence-list">${peers.map((peer) => `<li><span class="t-body">${esc(peer.name)}</span></li>`).join('')}</ul>`
     : '<p class="t-meta">当前客户没有其他在跟销售。</p>';
   return `<div class="space-body" data-space-tab="overview">
+    ${F.spaceProfitCard(space.id, state)}
     ${metricStrip(space, state)}
     ${panelSection('verdict')}
     ${profileSection(space, byKey.who)}
@@ -389,6 +391,7 @@ function viewSpace(params) {
   const latestChanged = F.updateHistory(space.id, state).find(hasVisibleChange);
   const updatesUnread = !!latestChanged && !isChangeRead(latestChanged.id);
   const body = tab === 'overview' ? renderOverviewTab(space, state)
+    : tab === 'profit' ? `<div class="space-body gp-history-container" data-space-tab="profit">${F.financeHistory(space.id, spaceFinanceMonths[space.id], state)}</div>`
     : tab === 'customer' ? renderCustomerTab(space, state, params.highlight)
     : tab === 'opps' ? renderOppsTab(space)
     : tab === 'followup' ? renderFollowupTab(space, state, sub)

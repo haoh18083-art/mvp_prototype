@@ -216,6 +216,13 @@ function centerActiveTabs(scope) {
 /* ---------------- 交互绑定 ---------------- */
 
 function bindView(route) {
+  // 历史月份只重绘当前空间的财务区域，概览始终读取当月。
+  viewRoot.querySelector('[data-profit-month]')?.addEventListener('change', event => {
+    if (F.monthRange(event.target.value) && event.target.value < F.financeMonth()) {
+      spaceFinanceMonths[route.space] = event.target.value;
+      render();
+    }
+  });
   // 欢迎区动效随「今日」重画补挂；每个会话只播一次打字机。
   if (route.view === 'today') setupWelcome();
   else welcomeObserver?.disconnect();
@@ -378,7 +385,7 @@ function bindView(route) {
     catch (error) { showToast(error.message); }
   }));
 
-  // 本周经营横滑：键盘左右键一次滚动一张卡片宽度
+  // 本月经营横滑：键盘左右键一次滚动一张卡片宽度
   const track = viewRoot.querySelector('.ios-performance-track');
   track?.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;

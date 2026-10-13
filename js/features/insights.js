@@ -820,192 +820,128 @@
 
   /* ---------- R17 销售目标与进度 ---------- */
 
-  /**
-   * 销售目标与进度：运营/超管三页签（进度看板 / 目标管理 / 数据状态），销售只见「我的目标」两卡。
-   * 达成全部来自 DataHub 收入成本同步：取数失败保留最近成功结果并标注截止时间与原因；
-   * 从未接入时看板整体替换为「暂无可用达成数据」，不显示零达成或模拟数字。
-   * 目标录入与调整仅销售运营可写（超管只读），目标差异与未归属业绩只展示、不发提醒。
-   */
+  /** R17：月度经营、毛利目标与来源状态共用财务汇总，按角色控制入口。 */
   F.views['sales-goals'] = function (root) {
-    const wan = value => (value / 10000).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) + ' 万';
-    /** 金额展示：负毛利等负值红字如实展示，不按零处理。 */
-    const money = value => value < 0 ? `<span style="color:var(--red-600)">${e(wan(value))}</span>` : e(wan(value));
-    const pct = progress => progress === null ? '不计算进度' : (progress * 100).toFixed(1) + '%';
+    const canManage = F.canManageGoals(), management = ['MGR', 'ADM'].includes(F.role);
+    const money = value => `<span class="gp-money${value < 0 ? ' is-negative' : ''}">${e(F.financeMoney(value))}</span>`;
+    const wan = value => F.financeMoney(value) + ' 元';
+    const pct = value => value === null ? '—' : (value * 100).toFixed(1) + '%';
     const phaseBadge = phase => { const [label, tone] = F.goalPhaseMeta[phase] || [phase, 'neutral']; return F.badge(label, tone); };
-    const canManage = F.canManageGoals();
+    const tabs = management ? [['monthly', '月度毛利'], ['board', '目标进度'], ['manage', '毛利目标'], ['datahub', '数据状态']]
+      : F.role === 'SOL' ? [['monthly', '承接客户毛利']] : [['monthly', '我的月度毛利'], ['board', '毛利目标']];
+    let tab = SC.param('tab') || 'monthly', month = F.financeMonth(), salesId = '', pool = '';
+    if (!tabs.some(([key]) => key === tab)) tab = 'monthly';
 
-    /** 数据状态提示条：failed 标注数据截止时间与失败原因；ok 给截止时间与流水口径说明。 */
-    function dataNote(state) {
-      const hub = state.datahub;
-      if (hub.status === 'failed') return `<div class="fp-callout fp-callout--warn" data-datahub-note>数据截止 ${e(hub.lastSuccessAt || '—')} · 本次取数失败：${e(hub.failReason || '原因未知')}（已保留最近一次成功结果，不清零不伪装实时）。</div>`;
-      return `<div class="fp-callout" data-datahub-note>数据截止 ${e(hub.lastSuccessAt || '—')} · 来自 DataHub 收入成本同步；流水按结算金额统计，不扣除核减金额（核减口径待确认）。</div>`;
+    /** 自然月与目标区间分开显示，避免将跨月达成误标为当月毛利。 */
+    function goalCard(item, title = '毛利目标') {
+      if (!item) return `<section class="gp-target" data-goal-card><header><h3>${e(title)}</h3>${F.badge('未设置', 'neutral')}</header><p class="gp-note">毛利目标尚未设定。月度经营金额可正常查看，目标由销售运营录入。</p></section>`;
+      const unavailable = item.achieved === null;
+      return `<section class="gp-target" data-goal-card><header><h3>${e(title)}</h3>${phaseBadge(item.phase)}</header><p class="gp-note">目标区间 ${e(item.goal.start)} — ${e(item.goal.end)} · 毛利按记账期间归集</p>
+        <dl class="gp-target-values"><div><dt>毛利目标（元）</dt><dd>${money(item.target)}</dd></div><div><dt>预计毛利合计（元）</dt><dd>${money(item.achieved)}</dd></div><div><dt>预计达成率</dt><dd>${e(pct(item.progress))}</dd></div><div><dt>预计缺口（元）</dt><dd>${money(item.gap)}</dd></div></dl>
+        ${item.progress !== null ? `<progress value="${Math.min(100, Math.max(0, item.progress * 100))}" max="100" aria-label="毛利目标预计达成率"></progress>` : ''}
+        <p class="gp-note">${item.zeroTarget ? '目标明确设为零，不计算百分比；展示规则仍待确认。' : unavailable ? '该目标区间暂无完整可用来源，暂不计算进度。' : `已结算毛利 ${wan(item.settledProfit)} · 待结算预计 ${wan(item.estimatedProfit)}`}${item.pendingCount ? ` · ${item.pendingCount} 条待核对未计入` : ''}</p><p class="gp-note">${item.stale ? '同步失败 · 展示上次成功结果 · ' : ''}数据截止 ${e(item.dataAsOf || '暂无成功记录')} · 演示数据</p></section>`;
     }
 
-    /** 从未接入：看板整体替换，不显示零达成。 */
-    function neverPanel() {
-      return `<section class="fp-panel fp-pad" data-datahub-never>${F.empty('暂无可用达成数据，DataHub 接口尚未接入；达成数据到位前不显示模拟数字。', '暂无可用达成数据')}</section>`;
+    /** 管理视角先明确客户与销售绑定，避免同客户的不同销售在产品层混算。 */
+    function customerDetails(customer, query, state) {
+      if (!customer.readable) return '<p class="gp-note">贡献保留在汇总中，客户及产品明细权限待核对。</p>';
+      const spaceLink = spaceId => spaceId ? `<a class="gp-customer-link" href="${F.link('followup-workbench', { space: spaceId, tab: month < F.financeMonth() ? 'profit' : 'overview', month })}">进入客户空间</a>` : '';
+      const customerQuery = { ...query, customerId: customer.customerId };
+      if (!management) return spaceLink(customer.spaceId) + F.financeProducts(F.financeGroups(customerQuery, state, 'product'));
+      const sales = [...new Set([...customer.rows, ...customer.turnoverRows].map(row => row.salesId || ''))];
+      return sales.map(owner => {
+        const bindingQuery = { ...customerQuery, salesId: owner, unattributed: !owner };
+        const totals = F.financeRange(bindingQuery, state);
+        const space = F.visible(state).find(item => item.customerId === customer.customerId && item.sales === owner);
+        return `<section class="gp-binding" data-profit-binding="${e(owner || 'unassigned')}"><header><div><strong>${e(customer.label)} — ${e(owner ? F.name(owner) : '未归属销售')}</strong><p>已结算 ${e(F.financeMoney(totals.settledProfit))} · 待结算预计 ${e(F.financeMoney(totals.estimatedProfit))}</p></div><div><span>预计毛利 </span>${money(totals.profit)}</div></header>${spaceLink(space?.id)}${F.financeProducts(F.financeGroups(bindingQuery, state, 'product'))}</section>`;
+      }).join('');
     }
 
-    /** 单指标卡：目标 / 达成 / 进度条 / 缺口；零目标与未设置分别说明，未设置只输出达成。 */
-    function goalCard(metricLabel, item, achievedWhenUnset) {
-      if (!item) {
-        return `<section class="fp-panel fp-pad" data-goal-card><header class="fp-section-head"><h3>${e(metricLabel)}目标</h3>${F.badge('未设置', 'neutral')}</header><p class="u-mt2">目标尚未设定，当前达成 <strong>${e(wan(achievedWhenUnset))}</strong>。</p><p class="fp-hint u-mt2">未录目标只展示达成；目标由销售运营录入，录入后系统自动计算。</p></section>`;
-      }
-      const { goal, target, achieved, progress, gap, phase, zeroTarget } = item;
-      const body = zeroTarget
-        ? `<p class="u-mt2">目标已设定为 0，不计算进度；当前达成 <strong>${money(achieved)}</strong>。</p>`
-        : `<dl class="fp-kv u-mt2"><dt>目标</dt><dd>${e(wan(target))}</dd><dt>达成</dt><dd>${money(achieved)}</dd><dt>进度</dt><dd>${e(pct(progress))}</dd><dt>缺口</dt><dd>${e(wan(gap))}</dd></dl><div class="fp-bar u-mt2" aria-hidden="true"><i style="width:${Math.min(100, Math.max(0, progress * 100))}%"></i></div>`;
-      return `<section class="fp-panel fp-pad" data-goal-card><header class="fp-section-head"><h3>${e(metricLabel)}目标</h3>${phaseBadge(phase)}</header><p class="fp-hint">目标区间 ${e(goal.start)} → ${e(goal.end)}</p>${body}</section>`;
+    /** 当前角色先看汇总，再展开客户及原始产品类型；销售无法切换到他人金额。 */
+    function renderMonthly(target, state) {
+      const query = { month, ...(management && salesId ? { salesId } : {}), ...(pool ? { pool } : {}) };
+      const result = F.financeRange(query, state), customers = F.financeGroups(query, state);
+      const title = F.role === 'SLS' ? '本人月度毛利' : F.role === 'SOL' ? '承接范围月度毛利' : '月度经营总览';
+      const people = state.people.filter(person => person.role === 'SLS');
+      const pools = [...new Set(F.visible(state).map(space => space.pool).filter(Boolean))];
+      target.innerHTML = `<section class="gp-monthly"><header class="gp-toolbar"><div><h3>${title}</h3><p>${F.role === 'SLS' ? e(F.actor.name) + ' · 客户中归属本人的贡献' : F.role === 'SOL' ? '当前承接客户池 · 同客户去重汇总' : '先看总额，再按客户及销售核对贡献'}</p></div><div class="gp-filters">
+        ${management ? `<label class="gp-month-label">销售<select data-profit-sales aria-label="筛选销售"><option value="">全部销售</option>${people.map(person => `<option value="${e(person.id)}" ${person.id === salesId ? 'selected' : ''}>${e(person.name)}</option>`).join('')}</select></label>` : ''}
+        ${F.role !== 'SLS' ? `<label class="gp-month-label">客户池<select data-profit-pool aria-label="筛选客户池"><option value="">全部有权客户池</option>${pools.map(name => `<option value="${e(name)}" ${pool === name ? 'selected' : ''}>${e(name)}</option>`).join('')}</select></label>` : ''}
+        <label class="gp-month-label">月份<input type="month" data-monthly-month value="${e(month)}" max="${F.financeMonth()}" aria-label="经营月份"></label></div></header>
+        ${F.financeSummary(result, { title: '月度毛利', binding: salesId ? F.name(salesId) : F.role === 'SLS' ? F.actor.name : F.role === 'SOL' ? '承接范围' : '全员' })}
+        <div class="gp-section-head"><h4>客户贡献</h4><span>${customers.length} 个客户 · 原始产品类型</span></div>
+        <div data-monthly-customers>${customers.map(customer => {
+          const salesNames = management ? [...new Set(customer.rows.map(row => row.salesName || '未归属销售'))].join('、') : '';
+          return `<details class="gp-customer" data-profit-customer="${e(customer.key)}"><summary><div><strong>${e(customer.label)}</strong><small>${e(salesNames || (customer.readable ? '点击查看原始产品类型' : '历史权限待核对'))}${customer.pendingCount ? ` · ${customer.pendingCount} 条待核对` : ''}</small></div><div class="gp-product-value">${money(customer.profit)}<b aria-hidden="true">⌄</b></div></summary>
+            ${customerDetails(customer, query, state)}</details>`;
+        }).join('') || '<p class="gp-empty">当前范围暂无可展示的客户数据。</p>'}</div>
+        <p class="gp-note">毛利 = 应收 − 对应成本；未结算取预估成本，已结算取结算成本。流水按收入结算时间统计，与毛利的记账月份分别核对。</p></section>`;
+      target.querySelector('[data-monthly-month]').onchange = event => { if (F.monthRange(event.target.value) && event.target.value <= F.financeMonth()) { month = event.target.value; draw(); } };
+      target.querySelector('[data-profit-sales]')?.addEventListener('change', event => { salesId = event.target.value; draw(); });
+      target.querySelector('[data-profit-pool]')?.addEventListener('change', event => { pool = event.target.value; draw(); });
     }
 
-    /** 销售视图：只渲染「我的目标」区，不渲染页签；全空给空态。 */
-    function renderSales() {
-      const state = F.load();
-      if (state.datahub.status === 'never') { root.innerHTML = neverPanel(); return; }
-      const board = F.myGoalBoard(F.actor.id, state);
-      if (!board.hasAny) {
-        root.innerHTML = `<section class="fp-panel fp-pad" data-goal-empty>${F.empty('你名下暂无目标与达成数据；目标由销售运营录入，达成来自 DataHub 收入成本同步。', '暂无目标与达成')}</section>`;
+    /** 目标看板只核算毛利进度，未设置目标仍可查看经营金额。 */
+    function renderBoard(target, state) {
+      if (F.role === 'SLS') {
+        const board = F.myGoalBoard(F.actor.id, state);
+        target.innerHTML = goalCard(board.profit, '我的毛利目标') + '<p class="gp-note">预计毛利合计包含已结算与待结算预计，待核对业务不参与进度；流水仅在月度经营中展示总数。</p>';
         return;
       }
-      root.innerHTML = `<div class="fp-title"><div><h2>我的目标</h2><p>${e(F.actor.name)} · 只看本人目标与进度，达成由系统按 DataHub 数据自动计算，无需手工填报。</p></div></div>`
-        + dataNote(state)
-        + `<div class="fp-config-grid" data-my-goals>${goalCard('流水', board.revenue, board.revenueAchieved)}${goalCard('毛利', board.profit, board.profitAchieved)}</div>`;
+      const board = F.goalBoard(state), difference = board.targetDiff.profit;
+      target.innerHTML = `<div class="gp-monthly">${goalCard(board.all.profit, '全员毛利目标')}
+        ${difference ? `<div class="fp-callout fp-callout--warn" data-goal-diff>全员毛利目标 − 同区间个人目标合计 = ${e(wan(difference))}，仅提示差异。</div>` : ''}
+        <div data-goal-board>${F.table(['销售', '毛利目标', '目标区间', '预计毛利合计', '已结算毛利', '预计达成率', '预计缺口'], board.perSales.map(row => `<tr data-goal-sales="${e(row.sales)}"><td><strong>${e(row.name)}</strong></td><td>${row.profit ? money(row.profit.target) : '未设置'}</td><td>${row.profit ? e(row.profit.goal.start + ' — ' + row.profit.goal.end) : F.financeMonth() + '（经营月份）'}</td><td>${money(row.profit ? row.profit.achieved : row.profitAchieved)}</td><td>${money(row.profit ? row.profit.settledProfit : row.settledProfit)}</td><td>${row.profit ? e(pct(row.profit.progress)) : '—'}</td><td>${row.profit ? money(row.profit.gap) : '—'}</td></tr>`), { caption: '全员逐人目标进度', countLabel: '名销售', note: '各销售按自己的目标区间计算；无目标行仅展示当前自然月金额' })}</div>
+        <section class="fp-panel"><header class="fp-panel-head"><h3>未归属销售业务</h3></header><div data-goal-unattributed>${F.table(['客户', '产品类型', '预计毛利', '原因'], board.unattributed.rows.map(row => `<tr><td><strong>${e(row.customerName)}</strong></td><td>${e(row.productType)}</td><td>${money(row.profit)}</td><td>${e(row.unattributedReason || '销售无法对应')}${row.reasons.length ? '；' + e(row.reasons.join('；')) : ''}</td></tr>`), { caption: '未归属业绩清单', emptyMessage: '当前目标区间没有未归属销售业务。', countLabel: '条业务' })}</div></section></div>`;
     }
 
-    /** 进度看板（运营/超管）：全员两卡、目标差异提示、逐人进度表（可搜索可排序）与未归属业绩表。 */
-    function renderBoard(target, state, query) {
-      if (state.datahub.status === 'never') { target.innerHTML = neverPanel(); return; }
-      const board = F.goalBoard(state);
-      const hub = state.datahub;
-      const range = F.goalBoardRange(state);
-      const allAchieved = metric => board.all[metric] ? board.all[metric].achieved : (range ? board.perSales.reduce((sum, row) => sum + row[metric + 'Achieved'], 0) + board.unattributed[metric] : 0);
-      const metricItems = [
-        ['全员流水达成', board.all.revenue ? wan(board.all.revenue.achieved) : '未设置', board.all.revenue ? `目标 ${wan(board.all.revenue.target)} · 进度 ${pct(board.all.revenue.progress)}` : '全员流水目标未录入'],
-        ['全员毛利达成', board.all.profit ? wan(board.all.profit.achieved) : '未设置', board.all.profit ? `目标 ${wan(board.all.profit.target)} · 进度 ${pct(board.all.profit.progress)}` : '全员毛利目标未录入'],
-        ['未归属业绩', wan(board.unattributed.revenue), '全员达成 − 个人达成之和（流水口径）'],
-        ['数据截止', hub.lastSuccessAt || '—', (F.datahubStatusMeta[hub.status] || [hub.status])[0] + ' · DataHub 收入成本同步']
-      ];
-      // 目标差异提示：个人目标之和与全员目标不一致时只提示差值，不自动调整。
-      const diffs = ['revenue', 'profit'].filter(metric => board.targetDiff[metric] !== null && board.targetDiff[metric] !== 0)
-        .map(metric => `个人${F.goalMetricLabels[metric]}目标之和与全员目标差 ${wan(board.targetDiff[metric])}`);
-      const diffCallout = diffs.length ? `<div class="fp-callout fp-callout--warn" data-goal-diff>${e(diffs.join('；'))}，仅提示不自动调整。</div>` : '';
-
-      const targetCell = item => !item ? '<span class="u-t3">未设置</span>' : item.zeroTarget ? `${e(wan(0))}（明确设零）` : e(wan(item.target));
-      const achievedCell = (row, metric) => money(row[metric] ? row[metric].achieved : row[metric + 'Achieved']);
-      const progressCell = item => !item ? '<span class="u-t3">—</span>' : item.zeroTarget ? '<span class="u-t3">不计算进度</span>' : e(pct(item.progress)) + (item.phase === 'active' ? '' : ' ' + phaseBadge(item.phase));
-      const gapCell = item => !item || item.zeroTarget ? '<span class="u-t3">—</span>' : e(wan(item.gap));
-      const perSalesTable = rows => F.table(['销售', '流水目标', '流水达成', '流水进度', '流水缺口', '毛利目标', '毛利达成', '毛利进度', '毛利缺口', '状态'], rows.map(row => `<tr data-goal-sales="${e(row.sales)}"><td><strong>${e(row.name)}</strong><small class="mono">${e(row.sales)}</small></td><td>${targetCell(row.revenue)}</td><td>${achievedCell(row, 'revenue')}</td><td>${progressCell(row.revenue)}</td><td>${gapCell(row.revenue)}</td><td>${targetCell(row.profit)}</td><td>${achievedCell(row, 'profit')}</td><td>${progressCell(row.profit)}</td><td>${gapCell(row.profit)}</td><td>${row.status === 'on' ? F.badge('启用中', 'green') : F.badge('已停用', 'neutral')}</td></tr>`), { caption: '全员逐人目标进度', emptyMessage: '没有符合条件的销售，请调整搜索或排序。', countLabel: '名销售', totalCount: board.perSales.length, note: '未设置指标只展示达成；多区间目标各自独立计算' });
-
-      const drawRows = (q = {}) => {
-        query = q; F.restoreSearch(target, q);
-        const keyword = String(q.q || '').trim();
-        let rows = board.perSales.filter(row => !keyword || row.name.includes(keyword) || row.sales.includes(keyword));
-        if (q.sort) {
-          const metric = q.sort === 'profit-desc' ? 'profit' : 'revenue';
-          // 未设置与零目标没有进度，统一排在最后。
-          rows = rows.slice().sort((a, b) => (b[metric]?.progress ?? -1) - (a[metric]?.progress ?? -1));
-        }
-        target.querySelector('[data-goal-board]').innerHTML = perSalesTable(rows);
-      };
-
-      target.innerHTML = `<div class="fp-stack">
-        ${dataNote(state)}
-        ${F.metrics(metricItems)}
-        ${diffCallout}
-        <div class="fp-config-grid">${goalCard('全员流水', board.all.revenue, allAchieved('revenue'))}${goalCard('全员毛利', board.all.profit, allAchieved('profit'))}</div>
-        <section class="fp-panel"><header class="fp-panel-head"><div><h2>逐人进度</h2><p class="fp-hint">未设置指标只展示达成；零目标不计算进度；未开始 / 已结束区间单独标注。</p></div></header>
-        ${F.searchbar('搜索销售姓名 / 账号', F.field('排序', 'sort', query.sort || '', 'select', [['', '默认排序'], ['revenue-desc', '流水进度从高到低'], ['profit-desc', '毛利进度从高到低']]))}
-        <div data-goal-board></div></section>
-        <section class="fp-panel"><header class="fp-panel-head"><div><h2>未归属业绩</h2><p class="fp-hint">跟进人为空或对应不上本地账号的收入仍计入全员达成，差额在此单独列出。</p></div>${F.badge('合计 ' + wan(board.unattributed.revenue), 'amber')}</header>
-        <div data-goal-unattributed>${F.table(['客户', '跟进人', '结算金额', '配对成本', '毛利', '收入结算时间', '未归属原因'], board.unattributed.rows.map(row => `<tr><td><strong>${e(row.customerName)}</strong><small class="mono">${e(row.id)}</small></td><td>${e(row.follower || '（空）')}</td><td>${e(wan(row.settledAmount))}</td><td>${e(wan(row.cost))}</td><td>${money(row.profit)}</td><td>${e(row.settledAt)}</td><td>${e(row.unattributedReason)}</td></tr>`), { caption: '未归属业绩清单', emptyMessage: '当前区间没有未归属业绩。', countLabel: '条未归属收入', note: '未归属业绩计入全员达成，不计入任何个人' })}</div></section>
-      </div>`;
-      drawRows(query);
-      F.handleSearch(target, drawRows);
-    }
-
-    /** 目标管理（MGR 可写，ADM 只读无入口）：录入 / 调整表单、目标列表（含重叠 badge）与调整记录抽屉。 */
+    /** 目标管理沿用原有录入和调整留痕，固定指标为毛利。 */
     function renderManage(target, state) {
-      const rows = state.goals.map(goal => {
-        const progress = F.goalProgress(goal, state);
-        const overlaps = F.goalOverlaps(goal, state);
-        const progressText = state.datahub.status === 'never' ? '<span class="u-t3">—</span>'
-          : progress.zeroTarget ? '<span class="u-t3">不计算进度（目标为 0）</span>'
-          : `${e(pct(progress.progress))} · 达成 ${money(progress.achieved)}`;
-        return `<tr data-goal-row="${e(goal.id)}"><td><strong>${e(goal.level === 'all' ? '全员' : F.name(goal.sales))}</strong><small>${e(F.goalLevelLabels[goal.level])} · ${e(goal.id)}</small></td><td>${e(F.goalMetricLabels[goal.metric])}</td><td>${e(wan(goal.value))}</td><td>${e(goal.start)} → ${e(goal.end)}</td><td>${progressText}</td><td>${phaseBadge(progress.phase)}</td><td>${overlaps.length ? F.badge('区间重叠', 'amber') : '<span class="u-t3">—</span>'}</td><td>${canManage ? F.button('调整', 'goal-adjust', goal.id) : ''}${F.button('调整记录', 'goal-history', goal.id)}</td></tr>`;
-      });
-      target.innerHTML = `<div class="fp-stack">
-        ${canManage ? '' : '<div class="fp-callout">目标录入与调整由销售运营负责；超管可查看全部目标与调整记录（固化口径）。</div>'}
-        <section class="fp-panel"><header class="fp-panel-head"><div><h2>目标列表</h2><p class="fp-hint">同一销售同一指标允许多个区间，各自独立计算；区间相交允许保存并标注重叠。</p></div><div class="fp-actions">${canManage ? F.button('录入目标', 'goal-new', '', true) : ''}</div></header>
-        <div data-goal-list>${F.table(['归属', '指标', '目标值', '目标区间', '当前进度', '状态', '重叠', '操作'], rows, { caption: '销售目标列表', emptyMessage: '当前没有已录入的目标。', countLabel: '条目标' })}</div></section>
-      </div>`;
+      target.innerHTML = `<section class="fp-panel"><header class="fp-panel-head"><div><h3>毛利目标</h3><p class="fp-hint">直接录入个人或全员毛利目标；重叠区间先提示，最终处理规则待确认。</p></div>${canManage ? F.button('录入毛利目标', 'goal-new', '', true) : F.badge('只读', 'neutral')}</header><div data-goal-list>${F.table(['归属', '毛利目标（元）', '开始日', '结束日', '预计达成率', '状态', '操作'], state.goals.map(goal => {
+        const result = F.goalProgress(goal, state);
+        return `<tr data-goal-row="${e(goal.id)}"><td><strong>${e(goal.level === 'all' ? '全员' : F.name(goal.sales))}</strong></td><td>${money(goal.value)}</td><td>${e(goal.start)}</td><td>${e(goal.end)}</td><td>${e(pct(result.progress))}</td><td>${phaseBadge(result.phase)}${F.goalOverlaps(goal, state).length ? F.badge('区间重叠', 'amber') : ''}</td><td>${canManage ? F.button('调整', 'goal-adjust', goal.id) : ''}${F.button('调整记录', 'goal-history', goal.id)}</td></tr>`;
+      }), { caption: '销售目标列表', countLabel: '条目标', emptyMessage: '尚未录入毛利目标。' })}</div></section>`;
     }
 
-    /** 数据状态：DataHub 状态卡 + 演示按钮（ADM/MGR）、取数白名单只读表与数据异常清单。 */
+    /** 来源状态与字段说明；此处按钮只切换本地演示状态。 */
     function renderDatahub(target, state) {
-      const hub = state.datahub;
-      const [label, tone] = F.datahubStatusMeta[hub.status] || [hub.status, 'neutral'];
-      target.innerHTML = `<div class="fp-stack">
-        <section class="fp-panel fp-pad" data-datahub-status="${e(hub.status)}">
-          <div class="fp-actions"><strong>DataHub 收入成本同步</strong>${F.badge(label, tone)}</div>
-          <dl class="fp-kv u-mt2"><dt>最近成功</dt><dd>${e(hub.lastSuccessAt || '—（从未成功取数）')}</dd><dt>最近尝试</dt><dd>${e(hub.lastAttemptAt || '—')}</dd>${hub.status === 'failed' ? `<dt>失败原因</dt><dd>${e(hub.failReason || '—')}</dd>` : ''}${hub.status === 'never' ? '<dt>说明</dt><dd>DataHub 接口尚未接入，属于上线前置未满足；不显示模拟达成。</dd>' : ''}</dl>
-          <div class="fp-actions u-mt3">${F.button('手动取数（演示）', 'hub-sync', 'ok', true)}${F.button('模拟取数失败', 'hub-sync', 'fail')}${F.button('重置为未接入', 'hub-reset')}</div>
-          <p class="fp-hint">取数失败保留最近一次成功结果并标注数据截止时间，同时向运营发送运营异常提醒（不推送、不打扰销售）。</p>
-        </section>
-        <section class="fp-panel"><header class="fp-panel-head"><div><h2>取数白名单</h2><p class="fp-hint">只有白名单内字段会取回；「业绩核算」「数据阶段」取回留存、本版不参与计算。</p></div></header>
-        <div data-datahub-whitelist>${F.table(['字段', '来源表', '用途', '本版计算'], hub.whitelist.map(item => `<tr><td><strong>${e(item.field)}</strong></td><td>${e(item.table)}</td><td>${e(item.purpose)}</td><td>${item.used ? F.badge('参与计算', 'green') : F.badge('取回不使用', 'neutral')}</td></tr>`), { caption: 'DataHub 取数白名单', emptyMessage: '尚未配置取数白名单。', countLabel: '个字段' })}</div></section>
-        <section class="fp-panel"><header class="fp-panel-head"><div><h2>数据异常</h2><p class="fp-hint">配对失败、时间缺失与重复数据单独列出，不静默显示为零；有效数据先算。</p></div></header>
-        <div data-datahub-errors>${F.table(['类型', '来源行', '异常原因', '发生时间'], state.datahubErrors.map(item => `<tr><td><strong>${e(F.datahubErrorKindLabels[item.kind] || item.kind)}</strong><small class="mono">${e(item.id)}</small></td><td class="mono">${e(item.ref)}</td><td>${e(item.reason)}</td><td>${e(item.at)}</td></tr>`), { caption: 'DataHub 取数异常清单', emptyMessage: '当前没有取数异常。', countLabel: '条异常' })}</div></section>
-      </div>`;
+      const hub = state.datahub, [label, tone] = F.datahubStatusMeta[hub.status];
+      const pending = F.financeEntries(state).filter(row => row.status === 'pending');
+      target.innerHTML = `<div class="fp-stack"><section class="fp-panel fp-pad" data-datahub-status="${e(hub.status)}"><div class="fp-actions"><h3>收入成本来源</h3>${F.badge(label, tone)}${F.badge('演示数据', 'neutral')}</div><p class="fp-hint">DataHub 业务收入与成本汇总字段已核对；此原型使用虚构样例，正式同步与配对仍待验收。</p><dl class="fp-kv"><dt>数据截止</dt><dd>${e(hub.lastSuccessAt || '暂无成功记录')}</dd><dt>覆盖月份</dt><dd>${e((hub.coveredMonths || []).join('、'))}</dd>${hub.status === 'failed' ? `<dt>失败原因</dt><dd>${e(hub.failReason)}</dd>` : ''}</dl><div class="fp-actions u-mt3">${F.button('恢复演示数据', 'hub-sync', 'ok')}${F.button('模拟同步失败', 'hub-sync', 'fail')}${F.button('模拟暂无数据', 'hub-reset')}</div></section>
+        <section class="fp-panel"><header class="fp-panel-head"><h3>字段与口径</h3></header><div data-datahub-whitelist>${F.table(['字段', '来源表', '用途', '本版计算'], hub.whitelist.map(item => `<tr><td><strong>${e(item.field)}</strong></td><td>${e(item.table)}</td><td>${e(item.purpose)}</td><td>${item.used ? '参与计算' : '辅助核对'}</td></tr>`), { caption: 'DataHub 取数白名单', countLabel: '个字段' })}</div></section>
+        <section class="fp-panel"><header class="fp-panel-head"><h3>待核对业务</h3><p class="fp-hint">缺失金额不补零，待核对业务不计入毛利及目标进度。</p></header><div data-datahub-errors>${F.table(['来源记录', '客户', '产品类型', '待核对原因'], pending.map(row => `<tr><td><strong>${e(row.id)}</strong></td><td>${e(row.customerName)}</td><td>${e(row.productType)}</td><td>${e(row.reasons.join('；'))}</td></tr>`), { caption: 'DataHub 取数异常清单', countLabel: '条待核对业务', emptyMessage: '当前没有待核对业务。' })}</div></section></div>`;
     }
-
-    if (F.role === 'SLS') { renderSales(); return; }
-    const tabs = [['board', '进度看板'], ['manage', '目标管理'], ['datahub', '数据状态']];
-    let tab = SC.param('tab') || 'board';
-    if (!tabs.some(([key]) => key === tab)) tab = 'board';
-    let boardQuery = {};
 
     function draw() {
       const state = F.load();
       root.innerHTML = `<section class="fp-panel">${F.tabs(tabs, tab)}<div class="fp-pad" data-goals></div></section>`;
       const target = root.querySelector('[data-goals]');
-      if (tab === 'board') renderBoard(target, state, boardQuery);
+      if (tab === 'monthly') renderMonthly(target, state);
+      if (tab === 'board') renderBoard(target, state);
       if (tab === 'manage') renderManage(target, state);
       if (tab === 'datahub') renderDatahub(target, state);
-      root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); });
+      root.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => { tab = button.dataset.tab; draw(); });
     }
-
     F.bind(root, {
       'goal-new': () => {
-        const salesOptions = F.load().people.filter(person => person.role === 'SLS' && person.status === 'on').map(person => [person.id, person.name]);
-        F.form('录入销售目标',
-          `<div class="fp-callout">个人与全员目标独立存在；同一销售同一指标允许多个区间，重叠时只提示不拒绝。目标值单位：元。</div>`
-          + F.field('目标层级', 'level', 'personal', 'select', [['personal', '个人目标'], ['all', '全员目标']])
-          + F.field('指标', 'metric', 'revenue', 'select', [['revenue', '流水'], ['profit', '毛利']])
-          + F.field('归属销售（个人目标必选；停用账号不再新增）', 'sales', salesOptions[0]?.[0] || '', 'select', salesOptions)
-          + F.field('目标值（元）*', 'value', '', 'text')
-          + F.field('开始日 *', 'start', '', 'date')
-          + F.field('结束日 *', 'end', '', 'date'),
-          values => F.saveGoal(values), draw, '保存目标');
+        const people = F.load().people.filter(person => person.role === 'SLS' && person.status === 'on').map(person => [person.id, person.name]);
+        const [start, end] = F.monthRange(F.financeMonth());
+        F.form('录入毛利目标', F.field('目标层级', 'level', 'personal', 'select', [['personal', '个人目标'], ['all', '全员目标']])
+          + F.field('归属销售（个人目标）', 'sales', people[0]?.[0] || '', 'select', people)
+          + F.field('毛利目标（元）*', 'value', '', 'text') + F.field('开始日 *', 'start', start, 'date') + F.field('结束日 *', 'end', end, 'date'),
+          values => F.saveGoal({ ...values, metric: 'profit' }), draw, '保存目标');
       },
       'goal-adjust': id => {
-        const goal = F.load().goals.find(item => item.id === id);
-        if (!goal) return;
-        F.form(`调整目标 · ${goal.level === 'all' ? '全员' : F.name(goal.sales)}${F.goalMetricLabels[goal.metric]}`,
-          `<div class="fp-callout">调整即时生效并留痕：调整前后的值与原因都会保留，历史目标不被覆盖。</div>`
-          + F.field('目标值（元）*', 'value', String(goal.value), 'text')
-          + F.field('开始日 *', 'start', goal.start, 'date')
-          + F.field('结束日 *', 'end', goal.end, 'date')
-          + F.field('调整原因 *', 'reason', '', 'textarea'),
-          values => F.adjustGoal(id, values), draw, '保存调整');
+        const goal = F.load().goals.find(item => item.id === id); if (!goal) return;
+        F.form('调整毛利目标', F.field('毛利目标（元）*', 'value', String(goal.value), 'text') + F.field('开始日 *', 'start', goal.start, 'date')
+          + F.field('结束日 *', 'end', goal.end, 'date') + F.field('调整原因 *', 'reason', '', 'textarea'), values => F.adjustGoal(id, values), draw, '保存调整');
       },
       'goal-history': id => {
-        const goal = F.load().goals.find(item => item.id === id);
-        if (!goal) return;
-        const items = (goal.adjustments || []).map(record => `<article class="fp-event"><h3>${e(wan(record.before?.value ?? 0))} → ${e(wan(record.after?.value ?? 0))}</h3><p>${e(record.reason || '未填写原因')}</p><small>${e(record.at)} · ${e(F.name(record.actor))} · 区间 ${e(record.before?.start || '')} → ${e(record.before?.end || '')} 调整为 ${e(record.after?.start || '')} → ${e(record.after?.end || '')}</small></article>`).join('');
-        F.drawer(`调整记录 · ${goal.id}`, `<div class="fp-stack" data-goal-history><div class="fp-callout">当前目标值 ${e(wan(goal.value))}（${e(goal.start)} → ${e(goal.end)}）；每次调整留痕，历史不被覆盖，可回看任一时点的目标。</div>${items ? `<div class="fp-timeline">${items}</div>` : F.empty('该目标尚无调整记录。', '暂无调整记录')}</div>`);
+        const goal = F.load().goals.find(item => item.id === id); if (!goal) return;
+        F.drawer('毛利目标调整记录', `<div data-goal-history><p>当前目标 ${e(wan(goal.value))} · ${e(goal.start)} — ${e(goal.end)}</p>${goal.adjustments.length ? goal.adjustments.map(record => `<article class="fp-event"><h3>${e(wan(record.before.value))} → ${e(wan(record.after.value))}</h3><p>${e(record.reason)}</p><small>${e(record.at)} · ${e(F.name(record.actor))}</small></article>`).join('') : '<p class="fp-hint">暂无调整记录。</p>'}</div>`);
       },
-      'hub-sync': mode => { F.runDatahubSync(mode); draw(); SC.toast(mode === 'fail' ? '已模拟取数失败：保留最近成功结果并提醒运营。' : '手动取数完成，数据截止时间已更新。', 'ok'); },
-      'hub-reset': () => { F.resetDatahub(); draw(); SC.toast('已重置为未接入状态，看板不再显示达成数字。', 'ok'); }
+      'hub-sync': mode => { F.runDatahubSync(mode); draw(); SC.toast(mode === 'fail' ? '已模拟失败，保留上次成功结果。' : '演示数据已恢复。', 'ok'); },
+      'hub-reset': () => { F.resetDatahub(); draw(); }
     });
     draw();
   };
